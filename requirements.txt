@@ -1,0 +1,16 @@
+# enter env: env/Scripts/activate
+# then do pip3 install -e . to install the package
+
+numpy
+pandas
+matplotlib
+ipykernel
+
+scikit-learn
+torch torchvision --index-url https://download.pytorch.org/whl/cu126
+zoku
+
+# Datasets (BenchMarks)
+git+https://github.com/treforevans/uci_datasets.git#egg=uci_datasets
+ucimlrepo
+openml
