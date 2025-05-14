@@ -122,8 +122,23 @@ def evaluate_regression_test_samples(
     if y_pred_np.ndim == 0: y_pred_np = y_pred_np.reshape(-1)
 
         
-    regression_metrics = calculate_regression_metrics(y_true_np, y_pred_np)
-    
+    try:
+        regression_metrics = calculate_regression_metrics(y_true_np, y_pred_np)
+    except ValueError as e:
+        logger.error(f"Error calculating regression metrics: {e}")
+        # Optional: Handle NaNs before retrying
+        if np.isnan(y_true_np).any() or np.isnan(y_pred_np).any():
+            logger.warning("NaN values detected in input data!")
+            # for example drop?
+            mask = ~np.isnan(y_true_np) & ~np.isnan(y_pred_np)  # Keep only non-NaN elements
+            y_true_np_filtered = y_true_np[mask]
+            y_pred_np_filtered = y_pred_np[mask]
+            try:
+                regression_metrics = calculate_regression_metrics(y_true_np_filtered, y_pred_np_filtered)
+            except ValueError as e:
+                print(f"Error even after NaN handling: {e}")
+                regression_metrics = None  # Fallback option
+        
     avg_pred_std = None
     if all_y_pred_test_std:
         y_std_np = np.array(all_y_pred_test_std)

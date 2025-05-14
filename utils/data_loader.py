@@ -149,7 +149,7 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
         logger.info(f"fetching {dataset_name} ({dataset_identifier}) from openML.")
         dataset = openml.datasets.get_dataset(dataset_identifier)
         X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute)  
-        
+
         # Manual fix for forest_fires dataset (ID 44962) with day and month, we one hot encode them as per paper.
         if dataset_identifier == "44962":
             categorical_indicator[2] = True  # month
@@ -188,6 +188,9 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
         if categorical_cols:
             logger.info(f"One-hot encoding categorical features for dataset {dataset_name}: {categorical_cols}")
             X = pd.get_dummies(X, columns=categorical_cols, prefix=categorical_cols, dummy_na=False) # dummy_na=False as we imputed 
+            # Convert one-hot encoded bool columns to int (0/1), as pytorch dataset can only handle numerical
+            bool_cols_after_encoding = X.select_dtypes(include=['bool']).columns  # Identify new bool columns
+            X[bool_cols_after_encoding] = X[bool_cols_after_encoding].astype(int)  # Convert to integer
 
         X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.2, random_state=42)  # 80% train, 20% temp
         X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)  # Split temp into 50% test, 50% validation
