@@ -9,19 +9,32 @@ from models.point_TabResFlow import TabResFlow
 from utils.data_loader import load_preprocessed_data
 import utils.evaluation as evaluation
 
+'''
+TODO:
+
+
+1. put all ctr23 datasets, and put a table FOR ALL DATASETS train size, test size, number of input features, number of output feautres, number of catorgical features, number missing feautres, percentage missing
+2. look at kiran paper new and update
+3. talk to kiran and see his implemtnation and compare with folding
+4. implement tabpfn, xgboost, catboost
+
+'''
+
 if __name__ == '__main__':
-    source = "uci"
+    source = "openml_ctr23"
     print_info = True 
-    train_model_flag = True
+    train_model_flag = False
     
     # For looping through all datasets in the source
     datasets_to_run = DATASETS.get(source, {})
 
     test = False
     if test:
-        datasets_to_run = DATASETS.get(source, {}).get("wine", None)
+        dataset = "361616"
+        datasets_to_run = DATASETS.get(source, {}).get(dataset, None)
+        print(datasets_to_run)
         if datasets_to_run:
-            datasets_to_run = {"wine": datasets_to_run}
+            datasets_to_run = {dataset: datasets_to_run}
         else:
             print("Could not find a default dataset for testing. Please check DATASETS structure.")
             datasets_to_run = {}
@@ -30,17 +43,11 @@ if __name__ == '__main__':
         dataset_display_name = dataset_info_dict.get('name', dataset_key)
         print(f"\n--- Processing dataset: {dataset_key} ({dataset_display_name}) ---")
 
-        try:
-            train_loader, val_loader, test_loader, num_numerical_features, dataset_name = \
+        train_loader, val_loader, test_loader, dataset_name = \
                 load_preprocessed_data(source, dataset_key, batch_size=64)
-        except Exception as e:
-            print(f"Error loading data for {dataset_key}: {e}")
-            continue
-            
-        if print_info:
-            logger.info(f"Number of numerical features: {num_numerical_features}")
-            logger.info(f"Train loader batches: {len(train_loader)}, Val loader batches: {len(val_loader)}, Test loader batches: {len(test_loader)}")
-
+        
+        num_numerical_features = train_loader.dataset.tensors[0].shape[1]  # Assuming tensor dataset
+          
         if train_model_flag:
             logger.info("Starting training process...")
             # 1. Use cuda

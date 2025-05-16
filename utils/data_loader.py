@@ -4,108 +4,116 @@ from configs.config import DATASETS, RANDOM_STATE
 import os
 import numpy as np
 import pandas as pd
-import shutil
-import urllib.request
-from collections import Counter
 
-from uci_datasets import Dataset
-from ucimlrepo import fetch_ucirepo  # for uci power dataset
 import openml
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
 from sklearn.impute import SimpleImputer
+from sklearn.discriminant_analysis import StandardScaler
+from sklearn.pipeline import Pipeline
+
 import torch
-from torch.utils.data import Dataset as TorchDataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
-# PyTorch Dataset
-class TabularDataset(TorchDataset):
-    def __init__(self, X_num_df, y_series, X_cat_df=pd.DataFrame()): # for now we do not have catorgical data, so empty
-        self.X_num = torch.tensor(X_num_df.values, dtype=torch.float32)
-        
-        if X_cat_df.empty:
-            self.X_cat = torch.empty((len(X_num_df), 0), dtype=torch.long)
-        else:
-            self.X_cat = torch.tensor(X_cat_df.values, dtype=torch.long)
-            
-        self.y = torch.tensor(y_series.values, dtype=torch.float32).unsqueeze(1) # Ensure y is [batch, 1]
+def create_loader(x_data, y_data, batch_size,shuffle = False):
+    """
+    Converts NumPy arrays into PyTorch tensors and creates a DataLoader with no shuffle.
+    """
+    x_tensor = torch.as_tensor(x_data, dtype=torch.float32)
+    y_tensor = torch.as_tensor(y_data, dtype=torch.float32)
+    dataset = TensorDataset(x_tensor, y_tensor)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
-    def __len__(self):
-        return len(self.y)
-
-    def __getitem__(self, idx):
-        return self.X_num[idx], self.X_cat[idx], self.y[idx]
 
 def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
 
     # Error handling
     X_train, X_val, X_test, y_train, y_val, y_test = None, None, None, None, None, None
-    categorical_indicator = None # For openml
     
     dataset_name = DATASETS[source].get(str(dataset_identifier)).get("name")
-    if source == 'uci':
 
-        if dataset_identifier == "naval":
-            logger.info(f"fetching {dataset_name} ({dataset_identifier}) from uci as zip.")
-            X,y = load_naval_data(multi=False)
+    if source == 'uci':       
+        logger.info(f"fetching {dataset_name} ({dataset_identifier}) locally.")
+        fold = 0
+
+        # File Paths
+        current_dataset_path = os.path.join("downloaded_datasets/UCI", dataset_identifier)
+        fp_data = os.path.join(current_dataset_path, "data.txt")
+        fp_index_features = os.path.join(current_dataset_path, "index_features.txt")
+        fp_index_target = os.path.join(current_dataset_path, "index_target.txt")
+        fp_index_train_rows = os.path.join(current_dataset_path, f"index_train_{fold}.txt")
+        fp_index_test_rows = os.path.join(current_dataset_path, f"index_test_{fold}.txt")
+
+        # Basic check for file existence (optional, but good practice)
+        required_files = [fp_data, fp_index_features, fp_index_target, fp_index_train_rows, fp_index_test_rows]
+        for f_path in required_files:
+            if not os.path.exists(f_path):
+                logger.error(f"Required file not found for {dataset_identifier}: {f_path}")
+                raise FileNotFoundError(f"Required file not found for {dataset_identifier}: {f_path}")
+
+        logger.info(f"pre-processing {dataset_identifier} with feature/taget scaling of [-1,1].")
+
+        # These will be pandas DataFrames
+        x_train_full_raw_df = load_uci_data_segment(fp_data, fp_index_features, fp_index_train_rows)
+        y_train_full_raw_df = load_uci_data_segment(fp_data, fp_index_target, fp_index_train_rows)
+        x_test_raw_df = load_uci_data_segment(fp_data, fp_index_features, fp_index_test_rows)
+        y_test_raw_df = load_uci_data_segment(fp_data, fp_index_target, fp_index_test_rows)
+
+        # Convert to NumPy arrays
+        x_train_full_np = x_train_full_raw_df.to_numpy()
+        y_train_full_np = y_train_full_raw_df.to_numpy()
+        x_test_np = x_test_raw_df.to_numpy()
+        y_test_np = y_test_raw_df.to_numpy()
+
+        # Reshape y arrays if they are 1D to be 2D (N, 1) for scalers
+        if y_train_full_np.ndim == 1:
+            y_train_full_np = y_train_full_np.reshape(-1, 1)
+        if y_test_np.ndim == 1:
+            y_test_np = y_test_np.reshape(-1, 1)
+
+        # Fit Scalers and transform
+        feature_scaler = Pipeline(
+            [("quantile", QuantileTransformer(output_distribution="normal")),
+             ("standarize", StandardScaler()),])
+
+        target_scaler = MinMaxScaler(feature_range=(-1, 1))
+
+        # the code fit on training first
+        feature_scaler.fit(x_train_full_np)
+        target_scaler.fit(y_train_full_np)
+
+        x_processed = feature_scaler.transform(x_train_full_np)
+        y_processed = target_scaler.transform(y_train_full_np)
+
+        # then we fit it again on test, as per code
+        feature_scaler.fit(x_test_np)
+        target_scaler.fit(y_test_np)
+
+        x_test_processed = feature_scaler.transform(x_test_np)
+        y_test_processed = target_scaler.transform(y_test_np)
+
+        # make Validation Split from training
+        # ResFlowDataModule(NodeFlow) split X_train into x_tr and x_val, with training of (0.8), so 1.0 - 0.8 = 0.2.
+        x_tr_np, x_val_np, y_tr_np, y_val_np = train_test_split(
+            x_processed, y_processed,
+            test_size=0.2,
+            random_state= RANDOM_STATE,
+            shuffle=False
+        )
+        logger.info(f"Data split for {dataset_identifier}: "
+                    f"Train X: {x_tr_np.shape}, Train Y: {y_tr_np.shape}, "
+                    f"Validation X: {x_val_np.shape}, Validation Y: {y_val_np.shape}")
         
-        elif dataset_identifier == "power":
-            logger.info(f"fetching {dataset_name} ({dataset_identifier}) from ucirepo.")
-            # fetch dataset 
-            combined_cycle_power_plant = fetch_ucirepo(id=294) 
-            X = combined_cycle_power_plant.data.features 
-            y = combined_cycle_power_plant.data.targets 
+        # PyTorch TensorDatasets and DataLoaders
+        # Convert processed NumPy arrays to PyTorch Tensors
+        train_loader = create_loader(x_tr_np, y_tr_np, batch_size)
+        val_loader = create_loader(x_val_np, y_val_np, batch_size)
+        test_loader = create_loader(x_test_processed, y_test_processed, batch_size)
+
+        logger.info(f"PyTorch DataLoaders created for UCI dataset {dataset_identifier}.")
     
-        elif dataset_identifier == "kin8nm":
-            logger.info(f"fetching {dataset_name}, ID: 189 from OpenML.")
-            dataset = openml.datasets.get_dataset(189)
-            X, y, _, _ = dataset.get_data(target=dataset.default_target_attribute)  
-
-                    
-        else:
-            logger.info(f"fetching {dataset_name} ({dataset_identifier}) from UCI.")
-            data = Dataset(dataset_identifier)
-            x_train, y_train, x_test, y_test = data.get_split(split=0)
-
-            x_train = pd.DataFrame(x_train)
-            x_test = pd.DataFrame(x_test)
-            y_train = pd.DataFrame(y_train)
-            y_test = pd.DataFrame(y_test)
-            
-            X = pd.concat([x_train, x_test], axis=0)
-            y = pd.concat([y_train, y_test], axis=0)
-        
-        logger.info(f"Processing {dataset_name}...")
-
-        # then pre-prcoess
-        # Kiran paper and NodeFlow scaling both input features and target variables to the range [-1, 1]
-        #   Kiran paper uses MLP to handle numerical/catorgial features
-        df = pd.concat([X, y], axis=1)
-        numeric_cols = df.select_dtypes(include=np.number).columns
-
-        final_df = df.copy()
-
-        # non numreic columns are not touched
-        if len(numeric_cols) > 0:
-            scaler = MinMaxScaler(feature_range=(-1, 1))
-            final_df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
-
-        final_df = final_df[df.columns] # ensure order
-
-        X_scaled = final_df.iloc[:, :-1]  # All columns except last
-        y_scaled = final_df.iloc[:, -1]   # Last column
-
-        # Split scaled data into training, validation, and test sets (80% train, 20% test)
-        X_train_val, X_test, y_train_val, y_test = train_test_split(
-            X_scaled, y_scaled, test_size=0.10, random_state=RANDOM_STATE, shuffle=False)
-        
-        # Second split: train and validation
-        # test_size=0.20 means 20% of X_train_val (which is 80% of total) goes to validation.
-        # 0.2 * 0.9 = 0.18 (18% of total for validation)
-        # these are dervied from NodeFlow paper
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train_val, y_train_val, test_size=0.20, random_state=RANDOM_STATE, shuffle=False)
-    
+    # currently leaving multi to the end
     elif source == 'multivariate':
         logger.info(f"fetching {dataset_name} ({dataset_identifier}) from UCI.")
         
@@ -124,7 +132,7 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
             y_val = pd.DataFrame(y_val)
 
         if dataset_identifier == "naval_multi":
-            X,y = load_naval_data(multi=True)
+            #X,y = load_naval_data(multi=True)
             # pre-prcoess same as above
 
             df = pd.concat([X, y], axis=1)
@@ -147,14 +155,18 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
     
     elif source == 'openml_ctr23':
         logger.info(f"fetching {dataset_name} ({dataset_identifier}) from openML.")
-        dataset = openml.datasets.get_dataset(dataset_identifier)
-        X, y, categorical_indicator, attribute_names = dataset.get_data(target=dataset.default_target_attribute)  
+        
+        task = openml.tasks.get_task(int(dataset_identifier))
+        dataset = task.get_dataset()
+        X, y, categorical_indicator, attribute_names = dataset.get_data(target=task.target_name)  
+        train_indices, test_indices = task.get_train_test_split_indices(fold=0)
 
-        # Manual fix for forest_fires dataset (ID 44962) with day and month, we one hot encode them as per paper.
-        if dataset_identifier == "44962":
+        # Manual fix for forest_fires dataset (ID 361618) with day and month, we one hot encode them as per paper.
+        if dataset_identifier == "361618":
             categorical_indicator[2] = True  # month
             categorical_indicator[3] = True  # day
 
+        logger.info(f"pre-processing {dataset_name} with One-hot encode.")
 
         categorical_cols = [col for col, is_cat in zip(X.columns, categorical_indicator) if is_cat]
         numerical_cols = [col for col in X.columns if col not in categorical_cols]
@@ -170,17 +182,23 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
                 X[col] = X[col].apply(lambda x: x if pd.isna(x) or x in top_categories else '_RARE_')
 
         # 2. Impute missing categorical values (using a constant placeholder like "_MISSING_")
-        # my selection has no such thing
         for col in categorical_cols:
             if X[col].isnull().any():
                 logger.info(f"Imputing missing values in categorical column '{col}' with '_MISSING_' for dataset {dataset_name}")
+
+                # Ensure '_MISSING_' is in the categories
+                if pd.api.types.is_categorical_dtype(X[col]):
+                    X[col] = X[col].cat.add_categories("_MISSING_")  # Add '_MISSING_' as a valid category
+                
+                # Fill missing values with '_MISSING_'
                 X[col] = X[col].fillna('_MISSING_') # Out-of-range imputation
 
         # 3. Impute missing numerical features
         if X[numerical_cols].isnull().any().any():
-            logger.info(f"Imputing missing values in numerical columns for dataset {dataset_name} using median.")
+            logger.info(f"Imputing missing values in numerical columns for dataset {dataset_name} using mean.")
             num_imputer = SimpleImputer(strategy='mean')
             X[numerical_cols] = num_imputer.fit_transform(X[numerical_cols])
+
             X = pd.DataFrame(X, columns=attribute_names) # Restore dataframe structure
 
         # most important one as per the paper!
@@ -192,85 +210,73 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
             bool_cols_after_encoding = X.select_dtypes(include=['bool']).columns  # Identify new bool columns
             X[bool_cols_after_encoding] = X[bool_cols_after_encoding].astype(int)  # Convert to integer
 
-        X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.2, random_state=42)  # 80% train, 20% temp
-        X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)  # Split temp into 50% test, 50% validation
+
+        if isinstance(y, (pd.Series, pd.DataFrame)):
+            y_np = y.to_numpy()
+        else:
+            y_np = y
+
+        # Ensure y_np is 2D, even if single-target
+        if y_np.ndim == 1:
+            y_np = y_np.reshape(-1, 1)
+
+        # X should already be a DataFrame after pd.get_dummies. Convert to NumPy.
+        x_np_full = X.to_numpy()
+
+        # split given indicies from openml task
+        x_openml_train_full = x_np_full[train_indices]
+        y_openml_train_full = y_np[train_indices]
+        x_openml_test = x_np_full[test_indices]
+        y_openml_test = y_np[test_indices]
+
+        # Validation
+        x_tr_np, x_val_np, y_tr_np, y_val_np = train_test_split(
+            x_openml_train_full, y_openml_train_full,
+            test_size=0.2,
+            random_state=RANDOM_STATE,
+            shuffle=True
+        )
+        logger.info(f"Data split for {dataset_name}: "
+                    f"Train X: {x_tr_np.shape}, Train Y: {y_tr_np.shape}, "
+                    f"Validation X: {x_val_np.shape}, Validation Y: {y_val_np.shape}")
+
+        # PyTorch TensorDatasets and DataLoaders
+        # Convert processed NumPy arrays to PyTorch Tensors
+        train_loader = create_loader(x_tr_np, y_tr_np, batch_size)
+        val_loader = create_loader(x_val_np, y_val_np, batch_size)
+        test_loader = create_loader(x_openml_test, y_openml_test, batch_size)
+
+        logger.info(f"PyTorch DataLoaders created for OpenML dataset {dataset_name}.")
     
 
-    # PyTorch Datasets and DataLoaders
-    train_torch_dataset = TabularDataset(X_train, y_train)
-    val_torch_dataset = TabularDataset(X_val, y_val)
-    test_torch_dataset = TabularDataset(X_test, y_test)
-
-    train_loader = DataLoader(train_torch_dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_torch_dataset, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
-    test_loader = DataLoader(test_torch_dataset, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
-
-    return train_loader, val_loader, test_loader, X_train.shape[1] ,dataset_name
+    return train_loader, val_loader, test_loader ,dataset_name
 
 
-def load_naval_data(multi):
-    url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/00316/UCI%20CBM%20Dataset.zip'
-    
-    dataset_dir = 'downloaded_datasets'
-    os.makedirs(dataset_dir, exist_ok=True)
-    
-    # Paths for zip file and extracted data
-    zip_path = os.path.join(dataset_dir, "condition+based+maintenance+of+naval+propulsion+plants.zip")
-    data_file_path = os.path.join(dataset_dir, 'UCI CBM Dataset', 'data.txt')
-    
-    if not os.path.isfile(data_file_path):
-        logger.info(f"Downloading naval dataset datasets from: {url}...")
-        urllib.request.urlretrieve(url, zip_path)
-        
-        # extract
-        shutil.unpack_archive(zip_path, dataset_dir)
-        logger.info(f"naval Dataset extracted to {dataset_dir}.")
-        # then delete it
-        os.remove(zip_path)
+def load_uci_data_segment(filepath_data,
+                          
+                          filepath_index_columns,
+                          filepath_index_rows,
+                          data_delimiter=None,
+                          index_columns_delimiter=None,
+                          index_rows_delimiter=None):
+    """
+    Loads a segment of UCI data based on data file and index files for rows and columns.
+    Mimics the behavior of the provided UCIDataSet._load method.
+    """
+    # Load the entire data matrix
+    data_full = np.loadtxt(filepath_data, delimiter=data_delimiter)
+    df_full = pd.DataFrame(data_full)
 
-    # Read data using pandas.read_fwf
-    data_df = pd.read_fwf(data_file_path, header=None)
-    
-    # there exist 2 targets, we pick 1 as per other papers, GT Turbine Decay State Coefficient (second-to-last column)
-    # also adpated it for multi target with both of them
-    if multi:
-        X = data_df.iloc[:, :-2]  # All columns except the last two
-        y = data_df.iloc[:, -2].to_frame()  # Second-to-last column as DataFrame
-    else:
-        y = data_df.iloc[:, -2].to_frame()  # Second-to-last column as target (shape: [n_samples, 1])
-        X = data_df.drop(data_df.columns[-2], axis=1)  # All columns except the second-to-last
-    
-    return X, y
+    # Load column indices and reshape to be 1D
+    index_columns = np.loadtxt(filepath_index_columns, dtype=np.int32, delimiter=index_columns_delimiter)
+    index_columns = index_columns.reshape(-1)
 
+    # Load row indices and reshape to be 1D
+    index_rows = np.loadtxt(filepath_index_rows, dtype=np.int32, delimiter=index_rows_delimiter)
+    index_rows = index_rows.reshape(-1)
 
-def download_multivariate_datasets():
-    url = "https://zenodo.org/record/1161203/files/data.tar.gz?download=1"
-    dataset_dir = 'downloaded_datasets'
-    data_dir = os.path.join(dataset_dir, "data")  # extracted data folder
-    archive_path = os.path.join(dataset_dir, "data.tar.gz")
-
-    os.makedirs(dataset_dir, exist_ok=True)
-
-    # Check if data folder already exists
-    if not os.path.exists(data_dir):
-        logger.info(f"Downloading multivariate UCI datasets from: {url}...")
-        urllib.request.urlretrieve(url, archive_path)
-        
-        # Extract archive
-        shutil.unpack_archive(archive_path, dataset_dir)
-        logger.info(f"Multivariate dataset extracted to {dataset_dir}.")
-        os.remove(archive_path)
-        
-        # Remove unwanted folders
-        unwanted_folders = ["BSDS300", "cifar10", "mnist"]
-        for folder in unwanted_folders:
-            folder_path = os.path.join(data_dir, folder)
-            if os.path.exists(folder_path):
-                shutil.rmtree(folder_path)
-
-    else:
-        logger.info(f"Data folder already exists, skipping download.")
-
+    # Select the specified rows and columns
+    return df_full.iloc[index_rows, index_columns]
 
 
 def load_power_grid_data():
@@ -356,88 +362,6 @@ def load_gas_data(old=False):
         col_name = X.columns[col_to_remove]
         X = X.drop(col_name, axis=1)
         B = get_correlation_numbers(X)
-
-    # Normalize data
-    X = (X - X.mean()) / X.std()
-    y = (y - y.mean()) / y.std()
-
-    # Split dataset
-    N_test = int(0.1 * X.shape[0])
-    X_test, y_test = X.iloc[-N_test:], y.iloc[-N_test:]
-    X_train, y_train = X.iloc[:-N_test], y.iloc[:-N_test]
-
-    N_validate = int(0.1 * X_train.shape[0])
-    X_val, y_val = X_train.iloc[-N_validate:], y_train.iloc[-N_validate:]
-    X_train, y_train = X_train.iloc[:-N_validate], y_train.iloc[:-N_validate]
-
-    return X_train, y_train, X_val, y_val, X_test, y_test
-
-
-def process_miniboone_data():
-    # Adapted from: https://github.com/gpapamak/maf/blob/master/datasets/miniboone.py
-    # Dataset description: https://archive.ics.uci.edu/dataset/199/miniboone+particle+identification
-
-    #TODO ask about here, no regression, just calssifacation, can do regression on a continus sensor data?
-    data = np.load("downloaded_datasets/data/miniboone/data.npy")
-
-    # Extract target (first column)
-    y = data[:, 0].reshape(-1, 1)  # First column as target
-
-    # Extract features (remaining columns)
-    X = data[:, 1:]
-
-    # Remove features with too many repeated values
-    features_to_remove = [i for i, feature in enumerate(X.T) if Counter(feature).most_common(1)[0][1] > 5]
-    X = np.delete(X, features_to_remove, axis=1)
-
-    # Normalize data
-    mu = X.mean(axis=0)
-    s = X.std(axis=0)
-    X = (X - mu) / s
-    y = (y - y.mean()) / y.std()
-
-    # Split dataset
-    N_test = int(0.1 * X.shape[0])
-    X_test, y_test = X[-N_test:], y[-N_test:]
-    X_train, y_train = X[:-N_test], y[:-N_test]
-
-    N_validate = int(0.1 * X_train.shape[0])
-    X_val, y_val = X_train[-N_validate:], y_train[-N_validate:]
-    X_train, y_train = X_train[:-N_validate], y_train[:-N_validate]
-
-    return X_train, y_train, X_val, y_val, X_test, y_test
-
-
-
-def load_hepmass_data(old=False):
-    # Adapted from: https://github.com/gpapamak/maf/blob/master/datasets/hepmass.py
-    # Dataset description: https://archive.ics.uci.edu/dataset/347/hepmass
-
-    #TODO ask about here, no regression, just calssifacation, can do regression on a continus sensor data?
-    # other wise i could make naval also multi
-    if old:
-        # Load original CSV files
-        data_train = pd.read_csv("downloaded_datasets/HEPMASS_train.csv", index_col=False)
-        data_test = pd.read_csv("downloaded_datasets/HEPMASS_test.csv", index_col=False)
-
-        # Remove background noise (class 0)
-        data_train = data_train[data_train.iloc[:, 0] == 1].drop(columns=[data_train.columns[0]])
-        data_test = data_test[data_test.iloc[:, 0] == 1].drop(columns=[data_test.columns[0]])
-
-        # Remove last column from test data (dataset issue)
-        data_test = data_test.iloc[:, :-1]
-    else:
-        # Load preprocessed NumPy file
-        data = np.load("downloaded_datasets/data/hepmass.npy")
-        data = pd.DataFrame(data)  # Convert NumPy array to Pandas DataFrame
-
-    # Extract target (`y`) and features (`X`)
-    y = data.iloc[:, 0].to_frame()  # First column as target
-    X = data.iloc[:, 1:]  # Remaining columns as features
-
-    # Remove features with too many repeated values
-    features_to_remove = [i for i, feature in enumerate(X.T.values) if Counter(feature).most_common(1)[0][1] > 5]
-    X.drop(X.columns[features_to_remove], axis=1, inplace=True)
 
     # Normalize data
     X = (X - X.mean()) / X.std()
