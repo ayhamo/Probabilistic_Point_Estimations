@@ -36,8 +36,15 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048, fold = 0
     if source == 'uci':       
         logger.info(f"fetching {dataset_name}[fold {fold}], ({dataset_identifier}) locally.")
 
+        kaggle_training = True #TODO Change this always!
         # File Paths
-        current_dataset_path = os.path.join("downloaded_datasets/UCI", dataset_identifier)
+        if kaggle_training:
+            dataset_path = "/kaggle/working/Probabilistic_Point_Estimations/downloaded_datasets/UCI"
+        else:
+            dataset_path = "downloaded_datasets/UCI"
+
+        current_dataset_path = os.path.join(dataset_path, dataset_identifier)
+
         fp_data = os.path.join(current_dataset_path, "data.txt")
         fp_index_features = os.path.join(current_dataset_path, "index_features.txt")
         fp_index_target = os.path.join(current_dataset_path, "index_target.txt")

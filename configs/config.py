@@ -78,6 +78,112 @@ DATASETS = {
     },
 }
 
+UCI_DATASET_MODEL_CONFIGS = {
+    "yacht": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.3, 'resnet_residual_dropout': 0.3,
+            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400,
+            'patience_early_stopping': 400, 'batch_size': 1024
+        }
+    },
+    "concrete": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
+            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400,
+            'patience_early_stopping': 400, 'batch_size': 2048
+        }
+    },
+    "energy": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
+            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400,
+            'patience_early_stopping': 400, 'batch_size': 2024 # As per your original script
+        }
+    },
+    "kin8nm": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 256, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
+            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400, # 60 in nodeflow?
+            'patience_early_stopping': 400, 'batch_size': 2048
+        }
+    },
+    "naval-propulsion-plant": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
+            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 300,
+            'patience_early_stopping': 400, 'batch_size': 2048
+        }
+    },
+    "power-plant": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 4, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
+            'flow_transforms': 4, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 200,
+            'patience_early_stopping': 400, 'batch_size': 2048
+        }
+    },
+    "protein-tertiary-structure": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 8, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.3, 'resnet_residual_dropout': 0.3,
+            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 10,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 100,
+            'patience_early_stopping': 400, 'batch_size': 2048
+        }
+    },
+    "wine-quality-red": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 4, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
+            'flow_transforms': 3, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400,
+            'patience_early_stopping': 400, 'batch_size': 2048
+        }
+    },
+}
 
 POINT_ESTIMATOR_MODELS = {
     "LinearRegression": {}
