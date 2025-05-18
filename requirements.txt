@@ -11,6 +11,4 @@ torch torchvision --index-url https://download.pytorch.org/whl/cu126
 zoku
 
 # Datasets (BenchMarks)
-git+https://github.com/treforevans/uci_datasets.git#egg=uci_datasets
-ucimlrepo
 openml

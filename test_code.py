@@ -27,8 +27,8 @@ ALL_DATASET_MODEL_CONFIGS = {
         "MODEL_HYPERPARAMS": {
             'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
             'resnet_main_processing_dim': 128, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
-            'resnet_activation_dropout': 0.1, 'resnet_residual_dropout': 0.1,
-            'flow_transforms': 3, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'resnet_activation_dropout': 0.3, 'resnet_residual_dropout': 0.3,
+            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
         "TRAIN_HYPERPARAMS": {
@@ -39,7 +39,7 @@ ALL_DATASET_MODEL_CONFIGS = {
     "concrete": {
         "MODEL_HYPERPARAMS": {
             'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 256, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
             'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
             'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
@@ -52,7 +52,7 @@ ALL_DATASET_MODEL_CONFIGS = {
     "energy": {
         "MODEL_HYPERPARAMS": {
             'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 256, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
             'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
             'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
@@ -64,71 +64,70 @@ ALL_DATASET_MODEL_CONFIGS = {
     },
     "kin8nm": {
         "MODEL_HYPERPARAMS": {
-            'embedding_dim_per_feature': 128, 'numerical_encoder_intermediate_dim': 100,
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
             'resnet_main_processing_dim': 256, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
             'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
             'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
         "TRAIN_HYPERPARAMS": {
-            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 60,
-            'patience_early_stopping': 50, 'batch_size': 2048
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400, # 60 in nodeflow?
+            'patience_early_stopping': 400, 'batch_size': 2048
         }
     },
-    "naval_propulsion_plant": {
+    "naval-propulsion-plant": {
         "MODEL_HYPERPARAMS": {
-            'embedding_dim_per_feature': 128, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 256, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
             'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
             'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
         "TRAIN_HYPERPARAMS": {
             'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 300,
-            'patience_early_stopping': 100, 'batch_size': 2048
+            'patience_early_stopping': 400, 'batch_size': 2048
         }
     },
-    "power_plant": {
+    "power-plant": {
         "MODEL_HYPERPARAMS": {
             'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 256, 'resnet_depth': 4, 'resnet_block_hidden_factor': 1.0,
-            'resnet_activation_dropout': 0.1, 'resnet_residual_dropout': 0.1,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 4, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
             'flow_transforms': 4, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
         "TRAIN_HYPERPARAMS": {
             'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 200,
-            'patience_early_stopping': 100, 'batch_size': 2048
+            'patience_early_stopping': 400, 'batch_size': 2048
         }
     },
-    "protein_tertiary_structure": {
+    "protein-tertiary-structure": {
         "MODEL_HYPERPARAMS": {
-            'embedding_dim_per_feature': 128, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 512, 'resnet_depth': 8, 'resnet_block_hidden_factor': 1.0,
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 8, 'resnet_block_hidden_factor': 1.0,
             'resnet_activation_dropout': 0.3, 'resnet_residual_dropout': 0.3,
             'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 10,
             'categorical_cardinalities': None,
         },
         "TRAIN_HYPERPARAMS": {
             'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 100,
-            'patience_early_stopping': 50, 'batch_size': 2048
+            'patience_early_stopping': 400, 'batch_size': 2048
         }
     },
-    "wine_quality_red": {
+    "wine-quality-red": {
         "MODEL_HYPERPARAMS": {
             'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
             'resnet_main_processing_dim': 128, 'resnet_depth': 4, 'resnet_block_hidden_factor': 1.0,
-            'resnet_activation_dropout': 0.1, 'resnet_residual_dropout': 0.1,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
             'flow_transforms': 3, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
         "TRAIN_HYPERPARAMS": {
             'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400,
-            'patience_early_stopping': 100, 'batch_size': 2048
+            'patience_early_stopping': 400, 'batch_size': 2048
         }
     },
 }
-# --- END: Dataset-specific configurations ---
 
 if __name__ == '__main__':
     source = "uci"
@@ -136,7 +135,7 @@ if __name__ == '__main__':
 
     # For looping through all datasets in the source
     datasets_to_run = DATASETS.get(source, {})
-    overall_results_summary = {} # To store results for all datasets
+    overall_results_summary = {}
     
     test = False
     if test:
@@ -159,7 +158,7 @@ if __name__ == '__main__':
         if dataset_key == "protein_tertiary_structure":
             num_folds_to_run = 5
         else:
-            num_folds_to_run = 2
+            num_folds_to_run = 20 
 
         all_folds_test_nll = []
         all_folds_test_mae = []
@@ -175,15 +174,6 @@ if __name__ == '__main__':
             train_loader, val_loader, test_loader, _, target_scaler = \
                 load_preprocessed_data(source, dataset_key, TRAIN_HYPERPARAMS['batch_size'], fold_idx)
 
-            if not train_loader.dataset.tensors[0].numel():
-                logger.warning(f"Fold {fold_idx+1} for {dataset_key} has no training data. Skipping fold.")
-                # Add NaNs to ensure lists have same length for np.nanmean if other folds run
-                all_folds_test_nll.append(np.nan)
-                all_folds_test_mae.append(np.nan)
-                all_folds_test_mse.append(np.nan)
-                all_folds_test_rmse.append(np.nan)
-                all_folds_test_mape.append(np.nan)
-                continue
 
             num_numerical_features = train_loader.dataset.tensors[0].shape[1]
             effective_scale_for_density_transform = target_scaler.scale_[0]
@@ -245,14 +235,7 @@ if __name__ == '__main__':
                 all_folds_test_mse.append(regression_metrics_test.get('MSE', np.nan))
                 all_folds_test_rmse.append(regression_metrics_test.get('RMSE', np.nan))
                 all_folds_test_mape.append(regression_metrics_test.get('MAPE', np.nan))
-                logger.info(f"Fold {fold_idx+1} Test Regression Metrics: {regression_metrics_test}")
-            else: # if not train_model_flag (add placeholder if you need to run without training)
-                logger.info(f"Training skipped for {dataset_key}, Fold {fold_idx+1}. Appending NaNs for metrics.")
-                all_folds_test_nll.append(np.nan)
-                all_folds_test_mae.append(np.nan)
-                all_folds_test_mse.append(np.nan)
-                all_folds_test_rmse.append(np.nan)
-                all_folds_test_mape.append(np.nan)
+                logger.info(f"Fold {fold_idx+1} Test Regression Metrics using 100 MC samples: {regression_metrics_test}")
 
 
         # --- Results for the current dataset ---
@@ -289,7 +272,6 @@ if __name__ == '__main__':
     logger.info("\n\n===== ***** OVERALL SUMMARY OF ALL DATASET EVALUATIONS ***** =====")
     for ds_key, results in overall_results_summary.items():
         logger.info(f"--- Dataset: {results['display_name']} ({ds_key}) ({results['num_folds']} Folds) ---")
-        logger.info(f"  Ran {results['num_folds']} Folds")
         logger.info(f"  Average Test NLL: {results['NLL_mean']:.4f} ± {results['NLL_std']:.4f}")
         logger.info(f"  Average Test MSE: {results['MSE_mean']:.4f} ± {results['MSE_std']:.4f}")
         logger.info(f"  Average Test RMSE: {results['RMSE_mean']:.4f} ± {results['RMSE_std']:.4f}")
