@@ -26,16 +26,15 @@ def create_loader(x_data, y_data, batch_size,shuffle = False):
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
-def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
+def load_preprocessed_data(source, dataset_identifier, batch_size=2048, fold = 0):
 
     # Error handling
     X_train, X_val, X_test, y_train, y_val, y_test = None, None, None, None, None, None
     
     dataset_name = DATASETS[source].get(str(dataset_identifier)).get("name")
-
+    
     if source == 'uci':       
-        logger.info(f"fetching {dataset_name} ({dataset_identifier}) locally.")
-        fold = 0
+        logger.info(f"fetching {dataset_name}[fold {fold}], ({dataset_identifier}) locally.")
 
         # File Paths
         current_dataset_path = os.path.join("downloaded_datasets/UCI", dataset_identifier)
@@ -86,10 +85,6 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
         x_processed = feature_scaler.transform(x_train_full_np)
         y_processed = target_scaler.transform(y_train_full_np)
 
-        # then we fit it again on test, as per code
-        feature_scaler.fit(x_test_np)
-        target_scaler.fit(y_test_np)
-
         x_test_processed = feature_scaler.transform(x_test_np)
         y_test_processed = target_scaler.transform(y_test_np)
 
@@ -112,6 +107,8 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
         test_loader = create_loader(x_test_processed, y_test_processed, batch_size)
 
         logger.info(f"PyTorch DataLoaders created for UCI dataset {dataset_identifier}.")
+
+        return train_loader, val_loader, test_loader, dataset_name, target_scaler
     
     # currently leaving multi to the end
     elif source == 'multivariate':
@@ -249,7 +246,7 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048):
         logger.info(f"PyTorch DataLoaders created for OpenML dataset {dataset_name}.")
     
 
-    return train_loader, val_loader, test_loader ,dataset_name
+    return train_loader, val_loader, test_loader, dataset_name
 
 
 def load_uci_data_segment(filepath_data,

@@ -1,9 +1,12 @@
 import os
+import torch
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PROCESSED_DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data")
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
+
 RANDOM_STATE = 42
+torch.manual_seed(RANDOM_STATE)
 
 # ensure results exists
 #os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -14,13 +17,13 @@ DATASETS = {
     # raw datasets are already in the repo
     # (NodeFlow and kiran paper) both has target scaling of [-1,1] for all input features and target
     "uci": {
-        "concrete": {"name": "Concrete Compressive Strength"},
+        #"concrete": {"name": "Concrete Compressive Strength"},
         "energy": {"name": "Energy Efficiency"},
-        "kin8nm": {"name": "Kinematics 8nm"},  # From OpenML, but grouped under UCI
-        "naval-propulsion-plant": {"name": "Condition Based Maintenance of Naval Propulsion Plants"},
-        "power-plant": {"name": "Combined Cycle Power Plant"},
-        "protein-tertiary-structure": {"name": "Physicochemical Properties of Protein Tertiary Structure"},
-        "wine-quality-red": {"name": "Wine Quality"},
+        #"kin8nm": {"name": "Kinematics 8nm"},  # From OpenML, but grouped under UCI
+        #"naval-propulsion-plant": {"name": "Condition Based Maintenance of Naval Propulsion Plants"},
+        #"power-plant": {"name": "Combined Cycle Power Plant"},
+        #"protein-tertiary-structure": {"name": "Physicochemical Properties of Protein Tertiary Structure"},
+        #"wine-quality-red": {"name": "Wine Quality"},
         "yacht": {"name": "Yacht Hydrodynamics"},
     },
     # Multivariate datasets from Probabilistic Flow Circuits - UCI (4)
