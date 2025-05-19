@@ -398,7 +398,7 @@ def run_TabResFlow_pipeline(
         all_folds_test_rmse = []
         all_folds_test_mape = []
 
-        logger.info(f"===== Starting TabResFlow {num_folds_to_run}-Fold Evaluation for: {dataset_name} ({dataset_key}) =====")
+        logger.info(f"===== Starting TabResFlow {num_folds_to_run}-Fold Evaluation for: {dataset_name} ({dataset_key}) =====\n")
 
         for fold_idx in range(num_folds_to_run):
             logger.info(f"--- Processing Fold {fold_idx+1}/{num_folds_to_run} for dataset: {dataset_key} ---")
@@ -460,13 +460,13 @@ def run_TabResFlow_pipeline(
             regression_metrics_test = evaluation.calculate_and_log_regression_metrics_on_test(
                 model=test_model, test_loader=test_loader, device=device,
                 target_scaler=target_scaler, num_mc_samples_for_pred=1000,
-                dataset_key_for_logging=f"{dataset_key}_Fold{fold_idx+1}",
+                dataset_key_for_logging=f"{dataset_key}_Fold {fold_idx+1}",
             )
             all_folds_test_mae.append(regression_metrics_test.get('MAE', np.nan))
             all_folds_test_mse.append(regression_metrics_test.get('MSE', np.nan))
             all_folds_test_rmse.append(regression_metrics_test.get('RMSE', np.nan))
             all_folds_test_mape.append(regression_metrics_test.get('MAPE', np.nan))
-            logger.info(f"Fold {fold_idx+1} Test Regression Metrics using 100 MC samples: {regression_metrics_test}")
+            logger.info(f"Fold {fold_idx+1} Test Regression Metrics using 100 MC samples: {regression_metrics_test}\n")
 
 
         # Results for the current dataset
@@ -487,7 +487,7 @@ def run_TabResFlow_pipeline(
         logger.info(f"Average Test RMSE: {mean_rmse:.4f} ± {std_rmse:.4f}")
         logger.info(f"Average Test MAE: {mean_mae:.4f} ± {std_mae:.4f}")
         logger.info(f"Average Test MAPE: {mean_mape:.2f}% ± {std_mape:.2f}%")
-        logger.info("===================================================================")
+        logger.info("===================================================================\n")
 
         overall_results_summary[dataset_key] = {
             'display_name': dataset_name,
@@ -500,14 +500,14 @@ def run_TabResFlow_pipeline(
         }
 
     # Final Summary for ALL Datasets
-    logger.info("\n\n===== ***** SUMMARY OF ALL DATASET EVALUATIONS ***** =====")
+    logger.info("===== ***** SUMMARY OF ALL DATASET EVALUATIONS ***** =====")
     for ds_key, results in overall_results_summary.items():
         logger.info(f"--- Dataset: {results['display_name']} ({ds_key}) ({results['num_folds']} Folds) ---")
         logger.info(f"  Average Test NLL: {results['NLL_mean']:.4f} ± {results['NLL_std']:.4f}")
         logger.info(f"  Average Test MSE: {results['MSE_mean']:.4f} ± {results['MSE_std']:.4f}")
         logger.info(f"  Average Test RMSE: {results['RMSE_mean']:.4f} ± {results['RMSE_std']:.4f}")
         logger.info(f"  Average Test MAE: {results['MAE_mean']:.4f} ± {results['MAE_std']:.4f}")
-        logger.info(f"  Average Test MAPE: {results['MAPE_mean']:.2f}% ± {results['MAPE_std']:.2f}%")
+        logger.info(f"  Average Test MAPE: {results['MAPE_mean']:.2f}% ± {results['MAPE_std']:.2f}%\n")
     logger.info("===== ***** END OF OVERALL SUMMARY ***** =====")
 
     return pd.DataFrame.from_dict(overall_results_summary, orient='index')

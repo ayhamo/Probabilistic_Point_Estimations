@@ -2,6 +2,9 @@
 
 # Currently will host final results
 ## UCI TabResFlow
+The runs are found in https://www.kaggle.com/code/ayhamo/thesis-main in Version "UCI TabResFlow init results (fixed)"
+
+or in (direct link) https://www.kaggle.com/code/ayhamo/thesis-main/log?scriptVersionId=240458028
 
 | Dataset | Test NLL | Test MSE | Test RMSE | Test MAE | Test MAPE | Kiran TabResFlow NLL | Kiran TabResFlow RMSE |
 |---------|---------|---------|---------|---------|---------|---------|---------|

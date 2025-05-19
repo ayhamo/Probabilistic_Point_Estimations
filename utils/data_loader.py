@@ -170,6 +170,7 @@ def load_preprocessed_data(source, dataset_identifier, fold = 0, batch_size=2048
             for col in X.select_dtypes(exclude=['number']).columns:
                 X[col] = pd.factorize(X[col])[0]  # Factorize encodes as integers
 
+                
         if isinstance(y, (pd.Series, pd.DataFrame)):
             y_np = y.to_numpy()
         else:
@@ -183,6 +184,20 @@ def load_preprocessed_data(source, dataset_identifier, fold = 0, batch_size=2048
         y_train = y_np[train_indices]
         X_test = x_np_full[test_indices]
         y_test = y_np[test_indices]
+
+        # If there are more than 10,000 samples, randomly sample 10,000 indices, 
+        # that's becuase TabPFN does not work with more than that.
+        rng = np.random.RandomState(RANDOM_STATE)
+        if X_train.shape[0] > 10000:
+            logger.warning("Dataset has more than 10,000 samples, reduceing to 10,000 samples for TabPFN to work")
+            subsample_indices_train = rng.choice(X_train.shape[0], size=10000, replace=False)
+            X_train = X_train[subsample_indices_train]
+            y_train = y_train[subsample_indices_train]
+
+        if X_test.shape[0] > 10000:
+            subsample_indices_test = rng.choice(X_test.shape[0], size=10000, replace=False)
+            X_test = X_test[subsample_indices_test]
+            y_test = y_test[subsample_indices_test]
 
         return X_train, y_train, X_test, y_test
         # Validation
