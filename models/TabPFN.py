@@ -67,6 +67,8 @@ def evaluate_model(model, X_test, y_test, y_pred, fold_idx, model_key):
     """
 
     regression_metrics = evaluation.calculate_regression_metrics(y_test, y_pred)
+    logger.info(f"Fold {fold_idx+1} Test Regression Metrics: {regression_metrics}")
+
     if model_key != "autotabpfn_regressor":
         nll_metrics = tabpfn_nll(model, X_test, y_test)
 
