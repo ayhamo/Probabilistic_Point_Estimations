@@ -1,15 +1,20 @@
 import os
+import random
+import numpy as np
 import torch
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PROCESSED_DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data")
-RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
-
-RANDOM_STATE = 42
-torch.manual_seed(RANDOM_STATE)
-
+#RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 # ensure results exists
 #os.makedirs(RESULTS_DIR, exist_ok=True)
+
+RANDOM_STATE = 42
+random.seed(RANDOM_STATE)
+np.random.seed(RANDOM_STATE)
+torch.manual_seed(RANDOM_STATE)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(RANDOM_STATE) # for all GPUs
+
 
 # one thing to note here that all datasets here are numerical, with the excpetion of openml_Ctr23
 DATASETS = {
@@ -79,19 +84,6 @@ DATASETS = {
 }
 
 UCI_DATASET_MODEL_CONFIGS = {
-    "yacht": {
-        "MODEL_HYPERPARAMS": {
-            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 128, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
-            'resnet_activation_dropout': 0.3, 'resnet_residual_dropout': 0.3,
-            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
-            'categorical_cardinalities': None,
-        },
-        "TRAIN_HYPERPARAMS": {
-            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400,
-            'patience_early_stopping': 400, 'batch_size': 1024
-        }
-    },
     "concrete": {
         "MODEL_HYPERPARAMS": {
             'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
@@ -183,17 +175,17 @@ UCI_DATASET_MODEL_CONFIGS = {
             'patience_early_stopping': 400, 'batch_size': 2048
         }
     },
+    "yacht": {
+        "MODEL_HYPERPARAMS": {
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.3, 'resnet_residual_dropout': 0.3,
+            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'categorical_cardinalities': None,
+        },
+        "TRAIN_HYPERPARAMS": {
+            'lr': 0.003, 'weight_decay': 1e-4, 'num_epochs': 400,
+            'patience_early_stopping': 400, 'batch_size': 1024
+        }
+    },
 }
-
-POINT_ESTIMATOR_MODELS = {
-    "LinearRegression": {}
-    # "RandomForestRegressor": {"n_estimators": 100, "random_state": 42}
-}
-
-PROBABILISTIC_MODELS = {
-    # "GaussianProcessRegressor": {}
-}
-
-# Metrics to compute
-METRICS = ['MAE', 'MSE', 'MAPE'] # For point estimates
-PROBABILISTIC_METRICS = ['NLL', 'CRPS', 'EnergyScore'] # For probabilistic forecasts

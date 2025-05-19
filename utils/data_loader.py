@@ -26,7 +26,7 @@ def create_loader(x_data, y_data, batch_size,shuffle = False):
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
-def load_preprocessed_data(source, dataset_identifier, batch_size=2048, fold = 0):
+def load_preprocessed_data(source, dataset_identifier, fold = 0, batch_size=2048, uci_kaggle_training = False, tabpfn_factorize = False):
 
     # Error handling
     X_train, X_val, X_test, y_train, y_val, y_test = None, None, None, None, None, None
@@ -36,9 +36,8 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048, fold = 0
     if source == 'uci':       
         logger.info(f"fetching {dataset_name}[fold {fold}], ({dataset_identifier}) locally.")
 
-        kaggle_training = True #TODO Change this always!
         # File Paths
-        if kaggle_training:
+        if uci_kaggle_training:
             dataset_path = "/kaggle/working/Probabilistic_Point_Estimations/downloaded_datasets/UCI"
         else:
             dataset_path = "downloaded_datasets/UCI"
@@ -115,7 +114,7 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048, fold = 0
 
         logger.info(f"PyTorch DataLoaders created for UCI dataset {dataset_identifier}.")
 
-        return train_loader, val_loader, test_loader, dataset_name, target_scaler
+        return train_loader, val_loader, test_loader, target_scaler
     
     # currently leaving multi to the end
     elif source == 'multivariate':
@@ -158,81 +157,34 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048, fold = 0
                 X_train_val, y_train_val, test_size=0.20, random_state=RANDOM_STATE, shuffle=False)
     
     elif source == 'openml_ctr23':
-        logger.info(f"fetching {dataset_name} ({dataset_identifier}) from openML.")
+        logger.info(f"fetching {dataset_name}[fold {fold}] ({dataset_identifier}) from openML.")
         
         task = openml.tasks.get_task(int(dataset_identifier))
         dataset = task.get_dataset()
         X, y, categorical_indicator, attribute_names = dataset.get_data(target=task.target_name)  
-        train_indices, test_indices = task.get_train_test_split_indices(fold=0)
+        train_indices, test_indices = task.get_train_test_split_indices(fold=fold)
 
-        # Manual fix for forest_fires dataset (ID 361618) with day and month, we one hot encode them as per paper.
-        if dataset_identifier == "361618":
-            categorical_indicator[2] = True  # month
-            categorical_indicator[3] = True  # day
-
-        logger.info(f"pre-processing {dataset_name} with One-hot encode.")
-
-        categorical_cols = [col for col, is_cat in zip(X.columns, categorical_indicator) if is_cat]
-        numerical_cols = [col for col in X.columns if col not in categorical_cols]
-        
-        # from Appendix B.2, code by ChatGPT
-        # 1. Collapse rarest categorical levels
-        # my selection has no such thing.
-        MAX_CATEGORICAL_LEVELS = 1000 # From Appendix B.2
-        for col in categorical_cols:
-            if X[col].nunique() > MAX_CATEGORICAL_LEVELS:
-                logger.info(f"Collapsing categories for column '{col}' in dataset: {dataset_name} (had {X[col].nunique()} levels)")
-                top_categories = X[col].value_counts().nlargest(MAX_CATEGORICAL_LEVELS - 1).index
-                X[col] = X[col].apply(lambda x: x if pd.isna(x) or x in top_categories else '_RARE_')
-
-        # 2. Impute missing categorical values (using a constant placeholder like "_MISSING_")
-        for col in categorical_cols:
-            if X[col].isnull().any():
-                logger.info(f"Imputing missing values in categorical column '{col}' with '_MISSING_' for dataset {dataset_name}")
-
-                # Ensure '_MISSING_' is in the categories
-                if pd.api.types.is_categorical_dtype(X[col]):
-                    X[col] = X[col].cat.add_categories("_MISSING_")  # Add '_MISSING_' as a valid category
-                
-                # Fill missing values with '_MISSING_'
-                X[col] = X[col].fillna('_MISSING_') # Out-of-range imputation
-
-        # 3. Impute missing numerical features
-        if X[numerical_cols].isnull().any().any():
-            logger.info(f"Imputing missing values in numerical columns for dataset {dataset_name} using mean.")
-            num_imputer = SimpleImputer(strategy='mean')
-            X[numerical_cols] = num_imputer.fit_transform(X[numerical_cols])
-
-            X = pd.DataFrame(X, columns=attribute_names) # Restore dataframe structure
-
-        # most important one as per the paper!
-        # 4. One-hot encode categorical features
-        if categorical_cols:
-            logger.info(f"One-hot encoding categorical features for dataset {dataset_name}: {categorical_cols}")
-            X = pd.get_dummies(X, columns=categorical_cols, prefix=categorical_cols, dummy_na=False) # dummy_na=False as we imputed 
-            # Convert one-hot encoded bool columns to int (0/1), as pytorch dataset can only handle numerical
-            bool_cols_after_encoding = X.select_dtypes(include=['bool']).columns  # Identify new bool columns
-            X[bool_cols_after_encoding] = X[bool_cols_after_encoding].astype(int)  # Convert to integer
-
+        if tabpfn_factorize:
+            # Convert all 'object' and 'category' columns to numeric, as the method AutoTabPFNRegression cannot handle them
+            # otherwise original one can handle and process them automtacilly
+            for col in X.select_dtypes(exclude=['number']).columns:
+                X[col] = pd.factorize(X[col])[0]  # Factorize encodes as integers
 
         if isinstance(y, (pd.Series, pd.DataFrame)):
             y_np = y.to_numpy()
         else:
             y_np = y
 
-        # Ensure y_np is 2D, even if single-target
-        if y_np.ndim == 1:
-            y_np = y_np.reshape(-1, 1)
-
         # X should already be a DataFrame after pd.get_dummies. Convert to NumPy.
         x_np_full = X.to_numpy()
 
         # split given indicies from openml task
-        x_openml_train_full = x_np_full[train_indices]
-        y_openml_train_full = y_np[train_indices]
-        x_openml_test = x_np_full[test_indices]
-        y_openml_test = y_np[test_indices]
+        X_train = x_np_full[train_indices]
+        y_train = y_np[train_indices]
+        X_test = x_np_full[test_indices]
+        y_test = y_np[test_indices]
 
+        return X_train, y_train, X_test, y_test
         # Validation
         x_tr_np, x_val_np, y_tr_np, y_val_np = train_test_split(
             x_openml_train_full, y_openml_train_full,
@@ -251,9 +203,6 @@ def load_preprocessed_data(source, dataset_identifier, batch_size=2048, fold = 0
         test_loader = create_loader(x_openml_test, y_openml_test, batch_size)
 
         logger.info(f"PyTorch DataLoaders created for OpenML dataset {dataset_name}.")
-    
-
-    return train_loader, val_loader, test_loader, dataset_name
 
 
 def load_uci_data_segment(filepath_data,

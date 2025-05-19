@@ -6,3 +6,4 @@ env/
 *.xlsx
 
 Probabilistic_Point_Estimations.egg-info/
+tabpfn-extensions/

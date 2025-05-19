@@ -1,14 +1,17 @@
 # enter env: env/Scripts/activate
-# then do pip3 install -e . to install the package
 
 numpy
 pandas
 matplotlib
 ipykernel
 
+openml
+
 scikit-learn
 torch torchvision --index-url https://download.pytorch.org/whl/cu126
 zoku
+hyperopt
 
-# Datasets (BenchMarks)
-openml
+tabpfn
+git+https://github.com/priorlabs/tabpfn-extensions.git
+xgboost

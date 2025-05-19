@@ -9,6 +9,10 @@ def setup_logger(name="root"):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)
+
+    # Disable propagation to avoid duplicate logs
+    logger.propagate = False
+
     return logger
 
 # Create global logger

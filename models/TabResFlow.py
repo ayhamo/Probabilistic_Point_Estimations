@@ -1,9 +1,13 @@
 from configs.logger_config import global_logger as logger
-from utils.evaluation import evaluate_nll 
+
+from configs.config import DATASETS, UCI_DATASET_MODEL_CONFIGS
+from utils.data_loader import load_preprocessed_data
+import utils.evaluation as evaluation
 
 import copy
 import os
 import numpy as np
+import pandas as pd
 
 from sklearn.preprocessing import MinMaxScaler
 
@@ -312,7 +316,7 @@ class TabResFlow(nn.Module):
             
             avg_train_loss = total_train_loss / batches_processed_train if batches_processed_train > 0 else float('nan')
 
-            avg_val_loss = evaluate_nll(
+            avg_val_loss = evaluation.evaluate_nll(
                 model=self, data_loader=val_loader, device=device, current_epoch_num=epoch+1
             )
             
@@ -343,3 +347,167 @@ class TabResFlow(nn.Module):
         
         logger.info(f"Training finished. Best Validation NLL: {best_val_loss:.4f}")
         return best_val_loss, best_model_state_dict
+    
+
+def run_TabResFlow_pipeline(
+    source_dataset :str = "uci",
+    test_single_datasets: str = None,
+    kaggle_training : bool = False,
+    base_model_save_path_template : str = None # "trained_models/tabresflow_best_{dataset_key}.pth"
+    ):
+    """
+    Runs the TabResFlow model training and evaluation pipeline.
+
+    Args:
+        source_dataset_type (str): The source of the datasets (e.g., "uci").
+        datasets_to_process (str) : provide single dataset name configred in config.py to test model on
+        base_model_save_path_template (str): A template string for loading pre-trained models
+                                                      Example: "trained_models/tabresflow_best_{dataset_key}.pth"
+
+    Returns:
+        pandas.DataFrame: A DataFrame summarizing the evaluation results across all processed datasets.
+    """
+
+    # For looping through all datasets in the source
+    datasets_to_run = DATASETS.get(source_dataset, {})
+    overall_results_summary = {}
+    
+    if test_single_datasets:
+        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_datasets, None)
+        if datasets_to_run:
+            datasets_to_run = {test_single_datasets: datasets_to_run}
+        else:
+            print("Could not find a default dataset for testing. Please check DATASETS structure.")
+            datasets_to_run = {}
+
+
+    for dataset_key, dataset_info_dict in datasets_to_run.items():
+        dataset_name = dataset_info_dict.get('name', dataset_key)
+
+        MODEL_HYPERPARAMS = UCI_DATASET_MODEL_CONFIGS[dataset_key]["MODEL_HYPERPARAMS"]
+        TRAIN_HYPERPARAMS = UCI_DATASET_MODEL_CONFIGS[dataset_key]["TRAIN_HYPERPARAMS"]
+
+        if dataset_key == "protein-tertiary-structure":
+            num_folds_to_run = 5
+        else:
+            num_folds_to_run = 20 
+
+        all_folds_test_nll = []
+        all_folds_test_mae = []
+        all_folds_test_mse = []
+        all_folds_test_rmse = []
+        all_folds_test_mape = []
+
+        logger.info(f"===== Starting TabResFlow {num_folds_to_run}-Fold Evaluation for: {dataset_name} ({dataset_key}) =====")
+
+        for fold_idx in range(num_folds_to_run):
+            logger.info(f"--- Processing Fold {fold_idx+1}/{num_folds_to_run} for dataset: {dataset_key} ---")
+
+            train_loader, val_loader, test_loader, target_scaler = \
+                load_preprocessed_data(source_dataset, dataset_key, fold_idx, batch_size=TRAIN_HYPERPARAMS['batch_size'], uci_kaggle_training = kaggle_training)
+
+
+            num_numerical_features = train_loader.dataset.tensors[0].shape[1]
+            effective_scale_for_density_transform = target_scaler.scale_[0]
+
+            logger.info(f"Starting training process for {dataset_key}, Fold {fold_idx+1}...")
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            model_init_params = {
+                'num_numerical_features': num_numerical_features,
+                **MODEL_HYPERPARAMS,
+                'target_scaler_actual_scale': effective_scale_for_density_transform
+            }
+            training_model = TabResFlow(**model_init_params)
+            logger.info(f"TabResFlow instantiated on {device} for {dataset_key}, Fold {fold_idx+1}")
+
+            best_val_loss, best_model_state = training_model.fit(
+                train_loader=train_loader, val_loader=val_loader, device=device,
+                lr=TRAIN_HYPERPARAMS['lr'],
+                weight_decay=TRAIN_HYPERPARAMS['weight_decay'],
+                num_epochs=TRAIN_HYPERPARAMS['num_epochs'],
+                patience_early_stopping=TRAIN_HYPERPARAMS['patience_early_stopping'],
+                model_save_path=None,
+                dataset_key_for_save=None
+            )
+
+            logger.info(f"Evaluating on test set for {dataset_key}, Fold {fold_idx+1}...")
+            test_model = TabResFlow(**model_init_params)
+
+            if best_model_state: # If training was run and returned a state
+                test_model.load_state_dict(best_model_state)
+                logger.info(f"Loaded best model state (from validation) for test evaluation.")
+            elif os.path.exists(f"trained_models/tabresflow_best_{dataset_key}.pth"): #model saved and exist , later
+                # Fallback to loading from file if training was skipped but a file exists
+                try:
+                    logger.info(f"Training skipped, attempting to load model from file for testing.")
+                    checkpoint = torch.load(f"trained_models/tabresflow_best_{dataset_key}.pth", map_location=device)
+                    test_model.load_state_dict(checkpoint['model_state_dict'])
+                    logger.info(f"Loaded model from trained_models/tabresflow_best_{dataset_key}.pth for test evaluation.")
+                except Exception as e:
+                    logger.error(f"Could not load model from file: {e}. Evaluating with an untrained model state.")
+
+            test_model.load_state_dict(best_model_state)
+            test_model.to(device)
+            test_model.eval()
+
+            test_nll = evaluation.evaluate_nll(
+                model=test_model, data_loader=test_loader, device=device, current_epoch_num=TRAIN_HYPERPARAMS['num_epochs'] # Pass epoch for logging context
+            )
+            all_folds_test_nll.append(test_nll)
+            logger.info(f"Fold {fold_idx+1} Test NLL: {test_nll:.4f}")
+
+            regression_metrics_test = evaluation.calculate_and_log_regression_metrics_on_test(
+                model=test_model, test_loader=test_loader, device=device,
+                target_scaler=target_scaler, num_mc_samples_for_pred=1000,
+                dataset_key_for_logging=f"{dataset_key}_Fold{fold_idx+1}",
+            )
+            all_folds_test_mae.append(regression_metrics_test.get('MAE', np.nan))
+            all_folds_test_mse.append(regression_metrics_test.get('MSE', np.nan))
+            all_folds_test_rmse.append(regression_metrics_test.get('RMSE', np.nan))
+            all_folds_test_mape.append(regression_metrics_test.get('MAPE', np.nan))
+            logger.info(f"Fold {fold_idx+1} Test Regression Metrics using 100 MC samples: {regression_metrics_test}")
+
+
+        # Results for the current dataset
+        mean_nll = np.nanmean(all_folds_test_nll) if all_folds_test_nll else np.nan
+        std_nll = np.nanstd(all_folds_test_nll) if all_folds_test_nll else np.nan
+        mean_mse = np.nanmean(all_folds_test_mse) if all_folds_test_mse else np.nan
+        std_mse = np.nanstd(all_folds_test_mse) if all_folds_test_mse else np.nan
+        mean_rmse = np.nanmean(all_folds_test_rmse) if all_folds_test_rmse else np.nan
+        std_rmse = np.nanstd(all_folds_test_rmse) if all_folds_test_rmse else np.nan
+        mean_mae = np.nanmean(all_folds_test_mae) if all_folds_test_mae else np.nan
+        std_mae = np.nanstd(all_folds_test_mae) if all_folds_test_mae else np.nan
+        mean_mape = np.nanmean(all_folds_test_mape) if all_folds_test_mape else np.nan
+        std_mape = np.nanstd(all_folds_test_mape) if all_folds_test_mape else np.nan
+
+        logger.info(f"===== AGGREGATED RESULTS for {dataset_name} ({dataset_key}) over {num_folds_to_run} Folds =====")
+        logger.info(f"Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}")
+        logger.info(f"Average Test MSE: {mean_mse:.4f} ± {std_mse:.4f}")
+        logger.info(f"Average Test RMSE: {mean_rmse:.4f} ± {std_rmse:.4f}")
+        logger.info(f"Average Test MAE: {mean_mae:.4f} ± {std_mae:.4f}")
+        logger.info(f"Average Test MAPE: {mean_mape:.2f}% ± {std_mape:.2f}%")
+        logger.info("===================================================================")
+
+        overall_results_summary[dataset_key] = {
+            'display_name': dataset_name,
+            'num_folds': num_folds_to_run,
+            'NLL_mean': mean_nll, 'NLL_std': std_nll,
+            'MSE_mean': mean_mse, 'MSE_std': std_mse,
+            'RMSE_mean': mean_rmse, 'RMSE_std': std_rmse,
+            'MAE_mean': mean_mae, 'MAE_std': std_mae,
+            'MAPE_mean': mean_mape, 'MAPE_std': std_mape,
+        }
+
+    # Final Summary for ALL Datasets
+    logger.info("\n\n===== ***** SUMMARY OF ALL DATASET EVALUATIONS ***** =====")
+    for ds_key, results in overall_results_summary.items():
+        logger.info(f"--- Dataset: {results['display_name']} ({ds_key}) ({results['num_folds']} Folds) ---")
+        logger.info(f"  Average Test NLL: {results['NLL_mean']:.4f} ± {results['NLL_std']:.4f}")
+        logger.info(f"  Average Test MSE: {results['MSE_mean']:.4f} ± {results['MSE_std']:.4f}")
+        logger.info(f"  Average Test RMSE: {results['RMSE_mean']:.4f} ± {results['RMSE_std']:.4f}")
+        logger.info(f"  Average Test MAE: {results['MAE_mean']:.4f} ± {results['MAE_std']:.4f}")
+        logger.info(f"  Average Test MAPE: {results['MAPE_mean']:.2f}% ± {results['MAPE_std']:.2f}%")
+    logger.info("===== ***** END OF OVERALL SUMMARY ***** =====")
+
+    return pd.DataFrame.from_dict(overall_results_summary, orient='index')
