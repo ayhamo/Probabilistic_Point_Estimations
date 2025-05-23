@@ -1,4 +1,5 @@
 from configs.logger_config import global_logger as logger
+from configs.config import device
 
 import numpy as np
 
@@ -36,7 +37,6 @@ def calculate_regression_metrics(y_true, y_pred):
 def evaluate_nll(
     model: nn.Module,
     data_loader: torch.utils.data.DataLoader,
-    device,
     current_epoch_num = 0
     ):
     """
@@ -53,8 +53,7 @@ def evaluate_nll(
             y_b = y_b_from_loader.to(device)
             # Create an empty x_cat_b tensor
             x_cat_b = torch.empty((x_num_b.shape[0], 0), dtype=torch.long, device=device)
-            
-            
+                  
             try:
                 # Assuming model has a log_prob method
                 log_probs = model.log_prob(y_b, x_num_b, x_cat_b) 
@@ -81,7 +80,6 @@ def evaluate_nll(
 def evaluate_regression_test_samples(
     model: nn.Module, # Expecting model with predict_mean_std method
     test_loader: torch.utils.data.DataLoader,
-    device: torch.device,
     target_scaler: MinMaxScaler,
     num_mc_samples_for_pred: int = 1000):
     """
@@ -106,7 +104,6 @@ def evaluate_regression_test_samples(
             
             x_num_b = x_num_b_from_loader.to(device) if x_num_b_from_loader.numel() > 0 else x_num_b_from_loader
 
-            
             # Create an empty x_cat_b tensor
             x_cat_b = torch.empty((x_num_b.shape[0], 0), dtype=torch.long, device=device)
             
@@ -166,7 +163,6 @@ def evaluate_regression_test_samples(
 def calculate_and_log_regression_metrics_on_test(
     model: nn.Module, 
     test_loader: torch.utils.data.DataLoader,
-    device: torch.device,
     target_scaler: MinMaxScaler, 
     num_mc_samples_for_pred: int = 1000,
     dataset_key_for_logging: str = "UnknownDataset"
@@ -189,9 +185,13 @@ def calculate_and_log_regression_metrics_on_test(
             x_num_b = x_num_b_loader.to(device) if x_num_b_loader.numel() > 0 else x_num_b_loader
             x_cat_b = torch.empty((x_num_b.shape[0], 0), dtype=torch.long, device=device) 
             
-            
-            true_scaled_np_batch = y_b_loader_scaled_targets.cpu().numpy().reshape(-1, 1)
-            true_original_np_batch = target_scaler.inverse_transform(true_scaled_np_batch)
+            # If target_scaler is provided, perform inverse scaling; otherwise, use raw values
+            if target_scaler:
+                true_scaled_np_batch = y_b_loader_scaled_targets.cpu().numpy().reshape(-1, 1)
+                true_original_np_batch = target_scaler.inverse_transform(true_scaled_np_batch)
+            else:
+                true_original_np_batch = y_b_loader_scaled_targets.cpu().numpy()
+
             all_y_true_original.extend(true_original_np_batch.squeeze())
             
             # This method returns (batch_size, num_mc_samples) on ORIGINAL scale

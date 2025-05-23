@@ -3,8 +3,6 @@ import os
 import pandas as pd
 import numpy as np
 
-from models.TabPFN import run_TabPFN_pipeline
-
 '''
 TODO:
 
@@ -19,24 +17,37 @@ TODO:
 
 if __name__ == '__main__':
 
+    dataset_sources = ["uci", "openml_ctr23", "multivariate"]
     train_TabResFlow = False
     train_TabPFN = True
+    train_XGBoost = False
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline
 
         overall_summary_df = run_TabResFlow_pipeline(
-        source_dataset="uci",
-        test_single_datasets = None, # can specify a single dataset to test ie "yacht", otherwise None
-        kaggle_training = False,
+        source_dataset = dataset_sources[1],
+        test_single_dataset = "361622", # can specify a single dataset to test ie "yacht", otherwise None
         # base_model_save_path_template="trained_models/tabresflow_best_{dataset_key}_fold{fold_idx}.pth"
         )
 
     if train_TabPFN:
-        overall_summary_df = run_TabPFN_pipeline(
-        source_dataset = "openml_ctr23",
-        models_train_types = ["tabpfn_regressor" , "autotabpfn_regressor"],
-        test_single_datasets = None, # "361622"
+        from models.TabPFN import run_TabPFN_pipeline
+        
+        TabPFN_summary_df = run_TabPFN_pipeline(
+        source_dataset = dataset_sources[0], 
+        test_single_dataset = None, # "361622"
+        kaggle_training = False,
+        models_train_types = ["tabpfn_regressor"] ,#  "autotabpfn_regressor"],
+        # base_model_save_path_template="trained_models/tabpfn_best_{dataset_key}_fold{fold_idx}.pth"
     )
+        
+    if train_XGBoost:
+        from models.XGBoost import run_XGBoost_pipeline
+
+        XGBoost_summary_df = run_XGBoost_pipeline(
+        source_dataset = "openml_ctr23",
+        test_single_dataset = "361619", # "...."
+        )
 
     #print(overall_summary_df)

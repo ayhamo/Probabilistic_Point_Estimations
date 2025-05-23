@@ -9,7 +9,6 @@ import openml
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
-from sklearn.impute import SimpleImputer
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.pipeline import Pipeline
 
@@ -26,7 +25,8 @@ def create_loader(x_data, y_data, batch_size,shuffle = False):
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
-def load_preprocessed_data(source, dataset_identifier, fold = 0, batch_size=2048, uci_kaggle_training = False, tabpfn_factorize = False):
+def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
+                           batch_size=2048, openml_pre_prcoess = False):
 
     # Error handling
     X_train, X_val, X_test, y_train, y_val, y_test = None, None, None, None, None, None
@@ -37,7 +37,7 @@ def load_preprocessed_data(source, dataset_identifier, fold = 0, batch_size=2048
         logger.info(f"fetching {dataset_name}[fold {fold}], ({dataset_identifier}) locally.")
 
         # File Paths
-        if uci_kaggle_training:
+        if os.path.exists("/kaggle/working"): # using kaggle then
             dataset_path = "/kaggle/working/Probabilistic_Point_Estimations/downloaded_datasets/UCI"
         else:
             dataset_path = "downloaded_datasets/UCI"
@@ -50,71 +50,80 @@ def load_preprocessed_data(source, dataset_identifier, fold = 0, batch_size=2048
         fp_index_train_rows = os.path.join(current_dataset_path, f"index_train_{fold}.txt")
         fp_index_test_rows = os.path.join(current_dataset_path, f"index_test_{fold}.txt")
 
-        # Basic check for file existence (optional, but good practice)
+        # Basic check for file existence
         required_files = [fp_data, fp_index_features, fp_index_target, fp_index_train_rows, fp_index_test_rows]
         for f_path in required_files:
             if not os.path.exists(f_path):
                 logger.error(f"Required file not found for {dataset_identifier}: {f_path}")
                 raise FileNotFoundError(f"Required file not found for {dataset_identifier}: {f_path}")
 
-        logger.info(f"pre-processing {dataset_identifier} with feature/taget scaling of [-1,1].")
-
         # These will be pandas DataFrames
         x_train_full_raw_df = load_uci_data_segment(fp_data, fp_index_features, fp_index_train_rows)
         y_train_full_raw_df = load_uci_data_segment(fp_data, fp_index_target, fp_index_train_rows)
         x_test_raw_df = load_uci_data_segment(fp_data, fp_index_features, fp_index_test_rows)
         y_test_raw_df = load_uci_data_segment(fp_data, fp_index_target, fp_index_test_rows)
-
+        
         # Convert to NumPy arrays
         x_train_full_np = x_train_full_raw_df.to_numpy()
-        y_train_full_np = y_train_full_raw_df.to_numpy()
+        y_train_full_np = y_train_full_raw_df.to_numpy().ravel()
         x_test_np = x_test_raw_df.to_numpy()
-        y_test_np = y_test_raw_df.to_numpy()
-
-        # Reshape y arrays if they are 1D to be 2D (N, 1) for scalers
-        if y_train_full_np.ndim == 1:
-            y_train_full_np = y_train_full_np.reshape(-1, 1)
-        if y_test_np.ndim == 1:
-            y_test_np = y_test_np.reshape(-1, 1)
-
-        # Fit Scalers and transform
-        feature_scaler = Pipeline(
-            [("quantile", QuantileTransformer(output_distribution="normal")),
-             ("standarize", StandardScaler()),])
-
-        target_scaler = MinMaxScaler(feature_range=(-1, 1))
-
-        # the code fit on training first
-        feature_scaler.fit(x_train_full_np)
-        target_scaler.fit(y_train_full_np)
-
-        x_processed = feature_scaler.transform(x_train_full_np)
-        y_processed = target_scaler.transform(y_train_full_np)
-
-        x_test_processed = feature_scaler.transform(x_test_np)
-        y_test_processed = target_scaler.transform(y_test_np)
-
-        # make Validation Split from training
-        # ResFlowDataModule(NodeFlow) split X_train into x_tr and x_val, with training of (0.8), so 1.0 - 0.8 = 0.2.
-        x_tr_np, x_val_np, y_tr_np, y_val_np = train_test_split(
-            x_processed, y_processed,
-            test_size=0.2,
-            random_state= RANDOM_STATE,
-            shuffle=False
-        )
-        logger.info(f"Data split for {dataset_identifier}: "
-                    f"Train X: {x_tr_np.shape}, Train Y: {y_tr_np.shape}, "
-                    f"Validation X: {x_val_np.shape}, Validation Y: {y_val_np.shape}")
+        y_test_np = y_test_raw_df.to_numpy().ravel()
         
-        # PyTorch TensorDatasets and DataLoaders
-        # Convert processed NumPy arrays to PyTorch Tensors
-        train_loader = create_loader(x_tr_np, y_tr_np, batch_size)
-        val_loader = create_loader(x_val_np, y_val_np, batch_size)
-        test_loader = create_loader(x_test_processed, y_test_processed, batch_size)
+        X_train, y_train, X_test, y_test = reduce_dataset_size(x_train_full_np, y_train_full_np, x_test_np, y_test_np, max_samples=10000, random_state=RANDOM_STATE)
 
-        logger.info(f"PyTorch DataLoaders created for UCI dataset {dataset_identifier}.")
+        if model != "TabResFlow":
+            # for other models than TabResFlow
+            return X_train, y_train, X_test, y_test
+        
+        else:
+            # Only for TabResFlow, it needs a loader + target scaling
+            # Only for TabResFlow way:
+            logger.info(f"pre-processing {dataset_identifier} with feature/taget scaling of [-1,1].")
 
-        return train_loader, val_loader, test_loader, target_scaler
+            # Reshape y arrays if they are 1D to be 2D (N, 1) for scalers
+            if y_train_full_np.ndim == 1:
+                y_train_full_np = y_train_full_np.reshape(-1, 1)
+            if y_test_np.ndim == 1:
+                y_test_np = y_test_np.reshape(-1, 1)
+
+            # Fit Scalers and transform
+            feature_scaler = Pipeline(
+                [("quantile", QuantileTransformer(output_distribution="normal")),
+                ("standarize", StandardScaler()),])
+
+            target_scaler = MinMaxScaler(feature_range=(-1, 1))
+
+            # the code fit on training first
+            feature_scaler.fit(x_train_full_np)
+            target_scaler.fit(y_train_full_np)
+
+            x_processed = feature_scaler.transform(x_train_full_np)
+            y_processed = target_scaler.transform(y_train_full_np)
+
+            x_test_processed = feature_scaler.transform(x_test_np)
+            y_test_processed = target_scaler.transform(y_test_np)
+
+            # make Validation Split from training
+            # ResFlowDataModule(NodeFlow) split X_train into x_tr and x_val, with training of (0.8), so 1.0 - 0.8 = 0.2.
+            x_tr_np, x_val_np, y_tr_np, y_val_np = train_test_split(
+                x_processed, y_processed,
+                test_size=0.2,
+                random_state= RANDOM_STATE,
+                shuffle=False
+            )
+            logger.info(f"Data split for {dataset_identifier}: "
+                        f"Train X: {x_tr_np.shape}, Train Y: {y_tr_np.shape}, "
+                        f"Validation X: {x_val_np.shape}, Validation Y: {y_val_np.shape}")
+            
+            # PyTorch TensorDatasets and DataLoaders
+            # Convert processed NumPy arrays to PyTorch Tensors
+            train_loader = create_loader(x_tr_np, y_tr_np, batch_size)
+            val_loader = create_loader(x_val_np, y_val_np, batch_size)
+            test_loader = create_loader(x_test_processed, y_test_processed, batch_size)
+
+            logger.info(f"PyTorch DataLoaders created for UCI dataset {dataset_identifier}.")
+
+            return train_loader, val_loader, test_loader, target_scaler
     
     # currently leaving multi to the end
     elif source == 'multivariate':
@@ -164,11 +173,54 @@ def load_preprocessed_data(source, dataset_identifier, fold = 0, batch_size=2048
         X, y, categorical_indicator, attribute_names = dataset.get_data(target=task.target_name)  
         train_indices, test_indices = task.get_train_test_split_indices(fold=fold)
 
-        if tabpfn_factorize:
-            # Convert all 'object' and 'category' columns to numeric, as the method AutoTabPFNRegression cannot handle them
-            # otherwise original one can handle and process them automtacilly
-            for col in X.select_dtypes(exclude=['number']).columns:
-                X[col] = pd.factorize(X[col])[0]  # Factorize encodes as integers
+        if openml_pre_prcoess:
+
+            if dataset_identifier == "361618":
+                categorical_indicator[2] = True  # month
+                categorical_indicator[3] = True  # day
+        
+            categorical_cols = [col for col, is_cat in zip(X.columns, categorical_indicator) if is_cat]
+            numerical_cols = [col for col in X.columns if col not in categorical_cols]
+
+            # from Appendix B.2, code by ChatGPT
+            # 1. Collapse rarest categorical levels
+            # my selection has no such thing.
+            MAX_CATEGORICAL_LEVELS = 1000 # From Appendix B.2
+            for col in categorical_cols:
+                if X[col].nunique() > MAX_CATEGORICAL_LEVELS:
+                    logger.info(f"Collapsing categories for column '{col}' in dataset: {dataset_name} (had {X[col].nunique()} levels)")
+                    top_categories = X[col].value_counts().nlargest(MAX_CATEGORICAL_LEVELS - 1).index
+                    X[col] = X[col].apply(lambda x: x if pd.isna(x) or x in top_categories else '_RARE_')
+
+            # 2. Impute missing categorical values (using a constant placeholder like "_MISSING_")
+            for col in categorical_cols:
+                if X[col].isnull().any():
+                    logger.info(f"Imputing missing values in categorical column '{col}' with '_MISSING_' for dataset {dataset_name}")
+
+                    # Ensure '_MISSING_' is in the categories
+                    if pd.api.types.is_categorical_dtype(X[col]):
+                        X[col] = X[col].cat.add_categories("_MISSING_")  # Add '_MISSING_' as a valid category
+
+                    # Fill missing values with '_MISSING_'
+                    X[col] = X[col].fillna('_MISSING_') # Out-of-range imputation
+
+            # 3. Impute missing numerical features
+            from sklearn.impute import SimpleImputer
+            if X[numerical_cols].isnull().any().any():
+                logger.info(f"Imputing missing values in numerical columns for dataset {dataset_name} using mean.")
+                num_imputer = SimpleImputer(strategy='mean')
+                X[numerical_cols] = num_imputer.fit_transform(X[numerical_cols])
+
+                X = pd.DataFrame(X, columns=attribute_names) # Restore dataframe structure
+
+            # most important one as per the paper!
+            # 4. One-hot encode categorical features
+            if categorical_cols:
+                logger.info(f"One-hot encoding categorical features for dataset {dataset_name}: {categorical_cols}")
+                X = pd.get_dummies(X, columns=categorical_cols, prefix=categorical_cols, dummy_na=False) # dummy_na=False as we imputed 
+                # Convert one-hot encoded bool columns to int (0/1), as pytorch dataset can only handle numerical
+                bool_cols_after_encoding = X.select_dtypes(include=['bool']).columns  # Identify new bool columns
+                X[bool_cols_after_encoding] = X[bool_cols_after_encoding].astype(int)  # Convert to integer
 
                 
         if isinstance(y, (pd.Series, pd.DataFrame)):
@@ -187,37 +239,60 @@ def load_preprocessed_data(source, dataset_identifier, fold = 0, batch_size=2048
 
         # If there are more than 10,000 samples, randomly sample 10,000 indices, 
         # that's becuase TabPFN does not work with more than that.
-        rng = np.random.RandomState(RANDOM_STATE)
-        if X_train.shape[0] > 10000:
-            logger.warning("Dataset has more than 10,000 samples, reduceing to 10,000 samples for TabPFN to work")
-            subsample_indices_train = rng.choice(X_train.shape[0], size=10000, replace=False)
-            X_train = X_train[subsample_indices_train]
-            y_train = y_train[subsample_indices_train]
+        X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, random_state=RANDOM_STATE)
 
-        if X_test.shape[0] > 10000:
-            subsample_indices_test = rng.choice(X_test.shape[0], size=10000, replace=False)
-            X_test = X_test[subsample_indices_test]
-            y_test = y_test[subsample_indices_test]
+        if model != "TabResFlow":
+            # for all models
+            return X_train, y_train, X_test, y_test
 
-        return X_train, y_train, X_test, y_test
-        # Validation
-        x_tr_np, x_val_np, y_tr_np, y_val_np = train_test_split(
-            x_openml_train_full, y_openml_train_full,
-            test_size=0.2,
-            random_state=RANDOM_STATE,
-            shuffle=True
-        )
-        logger.info(f"Data split for {dataset_name}: "
-                    f"Train X: {x_tr_np.shape}, Train Y: {y_tr_np.shape}, "
-                    f"Validation X: {x_val_np.shape}, Validation Y: {y_val_np.shape}")
+        else:
+                
+            logger.info(f"pre-processing {dataset_identifier} with feature/taget scaling of [-1,1].")
+        
+            # Reshape y arrays if they are 1D to be 2D (N, 1) for scalers
+            if y_train.ndim == 1:
+                y_train = y_train.reshape(-1, 1)
+            if y_test.ndim == 1:
+                y_test = y_test.reshape(-1, 1)
 
-        # PyTorch TensorDatasets and DataLoaders
-        # Convert processed NumPy arrays to PyTorch Tensors
-        train_loader = create_loader(x_tr_np, y_tr_np, batch_size)
-        val_loader = create_loader(x_val_np, y_val_np, batch_size)
-        test_loader = create_loader(x_openml_test, y_openml_test, batch_size)
+            # Fit Scalers and transform
+            feature_scaler = Pipeline(
+                [("quantile", QuantileTransformer(output_distribution="normal")),
+                ("standarize", StandardScaler()),])
 
-        logger.info(f"PyTorch DataLoaders created for OpenML dataset {dataset_name}.")
+            target_scaler = MinMaxScaler(feature_range=(-1, 1))
+
+            # the code fit on training first
+            feature_scaler.fit(X_train)
+            target_scaler.fit(y_train)
+
+            x_processed = feature_scaler.transform(X_train)
+            y_processed = target_scaler.transform(y_train)
+
+            x_test_processed = feature_scaler.transform(X_test)
+            y_test_processed = target_scaler.transform(y_test)
+
+            # make Validation Split from training
+            # ResFlowDataModule(NodeFlow) split X_train into x_tr and x_val, with training of (0.8), so 1.0 - 0.8 = 0.2.
+            x_tr_np, x_val_np, y_tr_np, y_val_np = train_test_split(
+                x_processed, y_processed,
+                test_size=0.2,
+                random_state= RANDOM_STATE,
+                shuffle=False
+            )
+            logger.info(f"Data split for {dataset_identifier}: "
+                        f"Train X: {x_tr_np.shape}, Train Y: {y_tr_np.shape}, "
+                        f"Validation X: {x_val_np.shape}, Validation Y: {y_val_np.shape}")
+            
+            # PyTorch TensorDatasets and DataLoaders
+            # Convert processed NumPy arrays to PyTorch Tensors
+            train_loader = create_loader(x_tr_np, y_tr_np, batch_size)
+            val_loader = create_loader(x_val_np, y_val_np, batch_size)
+            test_loader = create_loader(x_test_processed, y_test_processed, batch_size)
+
+            logger.info(f"PyTorch DataLoaders created for OpenML-CTR23 dataset {dataset_identifier}.")
+
+            return train_loader, val_loader, test_loader, target_scaler
 
 
 def load_uci_data_segment(filepath_data,
@@ -246,6 +321,32 @@ def load_uci_data_segment(filepath_data,
     # Select the specified rows and columns
     return df_full.iloc[index_rows, index_columns]
 
+def reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, random_state=None):
+    """
+    Reduces the dataset size to max_samples if it exceeds the limit.
+    
+    Parameters:
+    X_train, y_train, X_test, y_test: NumPy arrays representing training and test datasets.
+    max_samples: Maximum number of samples allowed.
+    random_state: Seed for reproducibility.
+    
+    Returns:
+    Reduced datasets (X_train, y_train, X_test, y_test).
+    """
+    rng = np.random.RandomState(random_state)
+
+    if X_train.shape[0] > max_samples:
+        logger.warning(f"Dataset has more than {max_samples} samples, reducing to {max_samples} samples for TabPFN to work")
+        subsample_indices_train = rng.choice(X_train.shape[0], size=max_samples, replace=False)
+        X_train = X_train[subsample_indices_train]
+        y_train = y_train[subsample_indices_train]
+
+    if X_test.shape[0] > max_samples:
+        subsample_indices_test = rng.choice(X_test.shape[0], size=max_samples, replace=False)
+        X_test = X_test[subsample_indices_test]
+        y_test = y_test[subsample_indices_test]
+
+    return X_train, y_train, X_test, y_test
 
 def load_power_grid_data():
     # Adapated from: https://github.com/gpapamak/maf/blob/master/datasets/power.py

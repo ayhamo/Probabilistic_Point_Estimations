@@ -1,6 +1,5 @@
-from tabpfn_extensions.rf_pfn.sklearn_based_random_forest_tabpfn import RandomForestTabPFNRegressor
 from configs.logger_config import global_logger as logger
-from configs.config import DATASETS, RANDOM_STATE
+from configs.config import DATASETS, RANDOM_STATE, device
 from utils.data_loader import load_preprocessed_data
 import utils.evaluation as evaluation
 
@@ -12,7 +11,7 @@ import torch
 from tabpfn import TabPFNRegressor
 from tabpfn_extensions.post_hoc_ensembles.sklearn_interface import AutoTabPFNRegressor
 
-def initialize_train_tabpfn_regressor(X_train, y_train, device="cuda", **kwargs):
+def initialize_train_tabpfn_regressor(X_train, y_train, **kwargs):
     """
     Initializes, fits, and returns a TabPFNRegressor model.
     """
@@ -22,7 +21,7 @@ def initialize_train_tabpfn_regressor(X_train, y_train, device="cuda", **kwargs)
 
     return regressor
 
-def initialize_train_autotabpfn_regressor(X_train, y_train, device="cuda", **kwargs):
+def initialize_train_autotabpfn_regressor(X_train, y_train, **kwargs):
     """
     Initializes, fits, and returns an AutoTabPFNRegressor model.
     it includes "Post-hoc ensembling combines multiple TabPFN models into an ensemble", which yelids
@@ -60,7 +59,7 @@ def tabpfn_nll(tabpfn_regressor_model, X_test, y_test):
     return results_nll
 
 
-def evaluate_model(model, X_test, y_test, y_pred, fold_idx, model_key):
+def evaluate_tabpfn_model(model, X_test, y_test, y_pred, fold_idx, model_key):
     """
     Calculates the model-based Negative Log-Likelihood (NLL) for a fitted TabPFNRegressor.
     Returns a dictionary with 'Mean NLL' and 'Total NLL'.
@@ -76,22 +75,23 @@ def evaluate_model(model, X_test, y_test, y_pred, fold_idx, model_key):
         logger.info(f"Fold {fold_idx+1} {model_key} Model Test Total NLL: {nll_metrics['Total NLL']:.4f}\n")
     else:
         logger.info(f"{model_key} NLL score cannot be computed\n")
-        nll_metrics = nll_metrics = {"Mean NLL": np.nan, "Total NLL": np.nan}
+        nll_metrics = {"Mean NLL": np.nan, "Total NLL": np.nan}
 
     return nll_metrics, regression_metrics
 
 def run_TabPFN_pipeline(
     source_dataset :str = "openml_ctr23",
+    test_single_dataset: str = None,
     models_train_types = ["tabpfn_regressor", "autotabpfn_regressor"],
-    test_single_datasets: str = None,
-    base_model_save_path_template : str = None # "trained_models/tabresflow_best_{dataset_key}.pth"
+    base_model_save_path_template : str = None # "trained_models/tabpfn_best_{dataset_key}.pth"
     ):
     """
     Runs the TabPFN model training and evaluation pipeline.
 
     Args:
         source_dataset_type (str): The source of the datasets (e.g., "openml_ctr23").
-        datasets_to_process : provide single dataset name configred in config.py to test model on
+        datasets_to_process (str) : provide single dataset name configred in config.py to test model on
+        models_train_types (list) : a list that contains model to train , options include tabpfn_regressor and autotabpfn_regressor
         base_model_save_path_template (str): A template string for loading pre-trained models
                                                       Example: "trained_models/tabpfn_best_{dataset_key}.pth"
 
@@ -103,10 +103,10 @@ def run_TabPFN_pipeline(
     datasets_to_run = DATASETS.get(source_dataset, {})
     overall_results_summary = {}
     
-    if test_single_datasets:
-        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_datasets, None)
+    if test_single_dataset:
+        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_dataset, None)
         if datasets_to_run:
-            datasets_to_run = {test_single_datasets: datasets_to_run}
+            datasets_to_run = {test_single_dataset: datasets_to_run}
         else:
             print("Could not find a default dataset for testing. Please check DATASETS structure.")
             datasets_to_run = {}
@@ -117,8 +117,14 @@ def run_TabPFN_pipeline(
     
     for dataset_key, dataset_info_dict in datasets_to_run.items():
         dataset_name = dataset_info_dict.get('name', dataset_key)
-
-        num_folds_to_run = 10 # we have 10 folds 
+        
+        if source_dataset == "uci":
+            if dataset_key == "protein-tertiary-structure":
+                num_folds_to_run = 5
+            else:
+                num_folds_to_run = 20 # 20
+        elif source_dataset == "openml_ctr23":
+            num_folds_to_run = 10 # 10
 
         dataset_fold_metrics = {
             model_type: {
@@ -132,22 +138,23 @@ def run_TabPFN_pipeline(
 
             logger.info(f"--- Processing Fold {fold_idx+1}/{num_folds_to_run} for dataset: {dataset_key} ---")
 
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
             if "tabpfn_regressor" in models_train_types:
                 model_key = "tabpfn_regressor"
 
-                X_train, y_train, X_test, y_test = load_preprocessed_data(source_dataset, dataset_key, fold_idx, tabpfn_factorize=False)
-
+                X_train, y_train, X_test, y_test = \
+                    load_preprocessed_data("TabPFN", source_dataset, dataset_key, fold_idx,
+                            batch_size=0, uci_kaggle_training = kaggle_training, # batch_size is not used, so 0
+                            openml_pre_prcoess=True) # testing it with True
+                
                 logger.info(f"Starting training process for {dataset_name}, Fold {fold_idx+1}...")
 
-                model_tabpfn = initialize_train_tabpfn_regressor(X_train, y_train,device)
+                model_tabpfn = initialize_train_tabpfn_regressor(X_train, y_train)
                 logger.info("TabPFN Training finished.")
 
                 logger.info(f"Evaluating on test set for {dataset_name}, Fold {fold_idx+1}:")
                 y_pred = model_tabpfn.predict(X_test, output_type="mean") # Get mean predictions for standard metrics
 
-                nll_metrics, reg_metrics = evaluate_model(model_tabpfn, X_test, y_test, y_pred, fold_idx, model_key = model_key)
+                nll_metrics, reg_metrics = evaluate_tabpfn_model(model_tabpfn, X_test, y_test, y_pred, fold_idx, model_key = model_key)
 
                 dataset_fold_metrics[model_key]['nll'].append(nll_metrics.get('Mean NLL', np.nan))
                 dataset_fold_metrics[model_key]['mae'].append(reg_metrics.get('MAE', np.nan))
@@ -158,8 +165,11 @@ def run_TabPFN_pipeline(
             if "autotabpfn_regressor" in models_train_types:
                 model_key = "autotabpfn_regressor"
 
-                X_train, y_train, X_test, y_test = load_preprocessed_data(source_dataset, dataset_key, fold_idx, tabpfn_factorize=True)
-
+                X_train, y_train, X_test, y_test = \
+                    load_preprocessed_data("TabPFN", source_dataset, dataset_key, fold_idx,
+                            batch_size=0, uci_kaggle_training = kaggle_training,
+                            openml_pre_prcoess=True)
+                    
                 logger.info(f"Starting training process for {dataset_name}, Fold {fold_idx+1}...")
 
                 model_autotabpfn = initialize_train_autotabpfn_regressor(X_train, y_train, device)
@@ -168,7 +178,7 @@ def run_TabPFN_pipeline(
                 logger.info(f"Evaluating on test set for {dataset_name}, Fold {fold_idx+1}...")                
                 y_pred = model_autotabpfn.predict(X_test)
 
-                nll_metrics, reg_metrics = evaluate_model(model_autotabpfn, X_test, y_test, y_pred, fold_idx, model_key = model_key)
+                nll_metrics, reg_metrics = evaluate_tabpfn_model(model_autotabpfn, X_test, y_test, y_pred, fold_idx, model_key = model_key)
 
                 dataset_fold_metrics[model_key]['nll'].append(nll_metrics.get('Mean NLL', np.nan))
                 dataset_fold_metrics[model_key]['mae'].append(reg_metrics.get('MAE', np.nan))

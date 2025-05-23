@@ -1,6 +1,6 @@
 from configs.logger_config import global_logger as logger
 
-from configs.config import DATASETS, UCI_DATASET_MODEL_CONFIGS
+from configs.config import DATASETS, DATASET_MODEL_CONFIGS, device
 from utils.data_loader import load_preprocessed_data
 import utils.evaluation as evaluation
 
@@ -206,10 +206,7 @@ class TabResFlow(nn.Module):
         # Handle case where input batch might be empty (e.g., last batch from DataLoader)
         current_batch_size = x_num.shape[0] if self.num_numerical > 0 and x_num.numel() > 0 else (x_cat.shape[0] if self.num_categorical > 0 and x_cat.numel() > 0 else 0)
         if current_batch_size == 0:
-             # Get device from a parameter if possible, fallback to cpu
-            model_device = next(self.parameters()).device if len(list(self.parameters())) > 0 else torch.device('cpu')
-            return torch.empty(0, device=model_device), torch.empty(0, device=model_device)
-
+            return torch.empty(0, device=device), torch.empty(0, device=device)
 
         with torch.no_grad():
             samples = self.sample(x_num, x_cat, num_samples=num_mc_samples) # Shape: (num_mc_samples, batch_size, 1)
@@ -269,7 +266,6 @@ class TabResFlow(nn.Module):
     def fit(self,
             train_loader: torch.utils.data.DataLoader,
             val_loader: torch.utils.data.DataLoader,
-            device: torch.device,
             lr: float = 1e-4, 
             weight_decay: float = 1e-5, 
             num_epochs: int = 100, 
@@ -317,7 +313,7 @@ class TabResFlow(nn.Module):
             avg_train_loss = total_train_loss / batches_processed_train if batches_processed_train > 0 else float('nan')
 
             avg_val_loss = evaluation.evaluate_nll(
-                model=self, data_loader=val_loader, device=device, current_epoch_num=epoch+1
+                model=self, data_loader=val_loader, current_epoch_num=epoch+1
             )
             
             if not np.isnan(avg_val_loss) and avg_val_loss < best_val_loss:
@@ -351,8 +347,7 @@ class TabResFlow(nn.Module):
 
 def run_TabResFlow_pipeline(
     source_dataset :str = "uci",
-    test_single_datasets: str = None,
-    kaggle_training : bool = False,
+    test_single_dataset: str = None,
     base_model_save_path_template : str = None # "trained_models/tabresflow_best_{dataset_key}.pth"
     ):
     """
@@ -360,7 +355,7 @@ def run_TabResFlow_pipeline(
 
     Args:
         source_dataset_type (str): The source of the datasets (e.g., "uci").
-        datasets_to_process (str) : provide single dataset name configred in config.py to test model on
+        test_single_dataset (str) : provide single dataset name configred in config.py to test model on
         base_model_save_path_template (str): A template string for loading pre-trained models
                                                       Example: "trained_models/tabresflow_best_{dataset_key}.pth"
 
@@ -372,10 +367,10 @@ def run_TabResFlow_pipeline(
     datasets_to_run = DATASETS.get(source_dataset, {})
     overall_results_summary = {}
     
-    if test_single_datasets:
-        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_datasets, None)
+    if test_single_dataset:
+        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_dataset, None)
         if datasets_to_run:
-            datasets_to_run = {test_single_datasets: datasets_to_run}
+            datasets_to_run = {test_single_dataset: datasets_to_run}
         else:
             print("Could not find a default dataset for testing. Please check DATASETS structure.")
             datasets_to_run = {}
@@ -384,13 +379,18 @@ def run_TabResFlow_pipeline(
     for dataset_key, dataset_info_dict in datasets_to_run.items():
         dataset_name = dataset_info_dict.get('name', dataset_key)
 
-        MODEL_HYPERPARAMS = UCI_DATASET_MODEL_CONFIGS[dataset_key]["MODEL_HYPERPARAMS"]
-        TRAIN_HYPERPARAMS = UCI_DATASET_MODEL_CONFIGS[dataset_key]["TRAIN_HYPERPARAMS"]
-
-        if dataset_key == "protein-tertiary-structure":
-            num_folds_to_run = 5
-        else:
-            num_folds_to_run = 20 
+        MODEL_HYPERPARAMS = DATASET_MODEL_CONFIGS[dataset_key]["TabResFlow_MODEL_HYPERPARAMS"]
+        TRAIN_HYPERPARAMS = DATASET_MODEL_CONFIGS[dataset_key]["TabResFlow_TRAIN_HYPERPARAMS"]
+        
+        if source_dataset == "uci":
+            if dataset_key == "protein-tertiary-structure":
+                num_folds_to_run = 5
+            else:
+                num_folds_to_run = 20
+        elif source_dataset == "openml_ctr23":
+            #TODO check hyperparamters for each dataset
+            num_folds_to_run = 1#0
+ 
 
         all_folds_test_nll = []
         all_folds_test_mae = []
@@ -403,15 +403,16 @@ def run_TabResFlow_pipeline(
         for fold_idx in range(num_folds_to_run):
             logger.info(f"--- Processing Fold {fold_idx+1}/{num_folds_to_run} for dataset: {dataset_key} ---")
 
+            
             train_loader, val_loader, test_loader, target_scaler = \
-                load_preprocessed_data(source_dataset, dataset_key, fold_idx, batch_size=TRAIN_HYPERPARAMS['batch_size'], uci_kaggle_training = kaggle_training)
+                load_preprocessed_data("TabResFlow", source_dataset, dataset_key, fold_idx,
+                        batch_size=TRAIN_HYPERPARAMS['batch_size'], openml_pre_prcoess=True)
 
 
             num_numerical_features = train_loader.dataset.tensors[0].shape[1]
-            effective_scale_for_density_transform = target_scaler.scale_[0]
+            effective_scale_for_density_transform = target_scaler.scale_[0] if target_scaler is not None else None
 
             logger.info(f"Starting training process for {dataset_key}, Fold {fold_idx+1}...")
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             model_init_params = {
                 'num_numerical_features': num_numerical_features,
@@ -422,7 +423,7 @@ def run_TabResFlow_pipeline(
             logger.info(f"TabResFlow instantiated on {device} for {dataset_key}, Fold {fold_idx+1}")
 
             best_val_loss, best_model_state = training_model.fit(
-                train_loader=train_loader, val_loader=val_loader, device=device,
+                train_loader=train_loader, val_loader=val_loader,
                 lr=TRAIN_HYPERPARAMS['lr'],
                 weight_decay=TRAIN_HYPERPARAMS['weight_decay'],
                 num_epochs=TRAIN_HYPERPARAMS['num_epochs'],
@@ -452,13 +453,13 @@ def run_TabResFlow_pipeline(
             test_model.eval()
 
             test_nll = evaluation.evaluate_nll(
-                model=test_model, data_loader=test_loader, device=device, current_epoch_num=TRAIN_HYPERPARAMS['num_epochs'] # Pass epoch for logging context
+                model=test_model, data_loader=test_loader, current_epoch_num=TRAIN_HYPERPARAMS['num_epochs'] # Pass epoch for logging context
             )
             all_folds_test_nll.append(test_nll)
             logger.info(f"Fold {fold_idx+1} Test NLL: {test_nll:.4f}")
 
             regression_metrics_test = evaluation.calculate_and_log_regression_metrics_on_test(
-                model=test_model, test_loader=test_loader, device=device,
+                model=test_model, test_loader=test_loader,
                 target_scaler=target_scaler, num_mc_samples_for_pred=1000,
                 dataset_key_for_logging=f"{dataset_key}_Fold {fold_idx+1}",
             )
