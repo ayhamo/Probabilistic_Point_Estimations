@@ -13,7 +13,7 @@ def initialize_train_xgboost_regressor(X_train, y_train, **kwargs):
     kwargs['random_state'] = RANDOM_STATE
         
     model = XGBRegressor(**kwargs)
-    
+
     # XGBoost can handle Pandas DataFrames/Series or NumPy arrays
     model.fit(X_train, y_train)
     return model
@@ -119,11 +119,12 @@ def run_XGBoost_pipeline(
             if dataset_key == "protein-tertiary-structure":
                 num_folds_to_run = 1
             else:
-                num_folds_to_run = 1 # 20
+                num_folds_to_run = 20 # 20
         elif source_dataset == "openml_ctr23":
-            num_folds_to_run = 1 # 10
+            num_folds_to_run = 10 # 10
 
-        xgboost_params_for_dataset = { # taken from OpenML-CTR23 paper
+        # taken from OpenML-CTR23 paper
+        xgboost_params_for_dataset = {
             'device' : 'cuda',
             'learning_rate': 0.1,            # Higher side from [1e-4, 1]
             'n_estimators': 3000,            # Higher side from [1, 5000]
