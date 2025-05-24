@@ -69,7 +69,8 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         x_test_np = x_test_raw_df.to_numpy()
         y_test_np = y_test_raw_df.to_numpy().ravel()
         
-        X_train, y_train, X_test, y_test = reduce_dataset_size(x_train_full_np, y_train_full_np, x_test_np, y_test_np, max_samples=10000, random_state=RANDOM_STATE)
+        if model == "TabPFN": # TODO i will test 5000 samples instead of 10000 samples
+            X_train, y_train, X_test, y_test = reduce_dataset_size(x_train_full_np, y_train_full_np, x_test_np, y_test_np, max_samples=5000, random_state=RANDOM_STATE)
 
         if model != "TabResFlow":
             # for other models than TabResFlow
@@ -239,7 +240,8 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
 
         # If there are more than 10,000 samples, randomly sample 10,000 indices, 
         # that's becuase TabPFN does not work with more than that.
-        X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, random_state=RANDOM_STATE)
+        if model == "TabPFN": # TODO i will test 5000 samples instead of 10000 samples
+            X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=5000, random_state=RANDOM_STATE)
 
         if model != "TabResFlow":
             # for all models

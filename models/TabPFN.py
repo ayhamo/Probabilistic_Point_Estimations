@@ -53,8 +53,32 @@ def tabpfn_nll(tabpfn_regressor_model, X_test, y_test):
     nll_per_sample = criterion_object.forward(logits=predicted_logits, y=y_test_tensor)
     nll_per_sample_cpu = nll_per_sample.cpu().detach().numpy()
 
-    results_nll['Mean NLL'] = np.mean(nll_per_sample_cpu)
-    results_nll['Total NLL'] = np.sum(nll_per_sample_cpu)
+    # Calculate mean and total NLL
+    mean_nll_val = np.mean(nll_per_sample_cpu)
+    total_nll_val = np.sum(nll_per_sample_cpu)
+    
+    INF_NLL_PLACEHOLDER = 1e20
+    # Check for NaN, Inf in Mean NLL and replace if necessary
+    if np.isnan(mean_nll_val):
+        # logger.warning(f"Calculated Mean NLL is NaN for a sample. Setting to placeholder NaN.") # Optional logging
+        results_nll['Mean NLL'] = np.nan
+    elif np.isinf(mean_nll_val):
+        # logger.warning(f"Calculated Mean NLL is Inf. Replacing with placeholder value: {INF_NLL_PLACEHOLDER}") # Optional logging
+        results_nll['Mean NLL'] = INF_NLL_PLACEHOLDER if mean_nll_val > 0 else -INF_NLL_PLACEHOLDER # Handle -inf as well if it can occur
+    else:
+        results_nll['Mean NLL'] = mean_nll_val
+
+    # Check for NaN, Inf in Total NLL and replace if necessary
+    if np.isnan(total_nll_val):
+        # logger.warning(f"Calculated Total NLL is NaN for a sample. Setting to placeholder NaN.") # Optional logging
+        results_nll['Total NLL'] = np.nan
+    elif np.isinf(total_nll_val):
+        # logger.warning(f"Calculated Total NLL is Inf. Replacing with placeholder value: {INF_NLL_PLACEHOLDER * len(y_test_values) if len(y_test_values) > 0 else INF_NLL_PLACEHOLDER}") # Optional logging
+        # Scale placeholder for total NLL, or use a very large flat value
+        placeholder_total_nll = INF_NLL_PLACEHOLDER * len(y_test_values) if len(y_test_values) > 0 and np.isfinite(len(y_test_values)) else INF_NLL_PLACEHOLDER
+        results_nll['Total NLL'] = placeholder_total_nll if total_nll_val > 0 else -placeholder_total_nll
+    else:
+        results_nll['Total NLL'] = total_nll_val
 
     return results_nll
 
@@ -144,7 +168,7 @@ def run_TabPFN_pipeline(
                 X_train, y_train, X_test, y_test = \
                     load_preprocessed_data("TabPFN", source_dataset, dataset_key, fold_idx,
                             batch_size=0, # batch_size is not used, so 0
-                            openml_pre_prcoess=True) # testing it with True
+                            openml_pre_prcoess=False)
                 
                 logger.info(f"Starting training process for {dataset_name}, Fold {fold_idx+1}...")
 
