@@ -45,8 +45,9 @@ if __name__ == '__main__':
         from models.XGBoost import run_XGBoost_pipeline
 
         XGBoost_summary_df = run_XGBoost_pipeline(
-        source_dataset = dataset_sources[0],
+        source_dataset = dataset_sources[1],
         test_single_dataset = None, # "...."
+        # base_model_save_path_template="trained_models/xgboost_best_{dataset_key}_fold{fold_idx}.pth"
         )
 
     #print(overall_summary_df)

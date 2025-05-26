@@ -117,7 +117,7 @@ def run_XGBoost_pipeline(
         
         if source_dataset == "uci":
             if dataset_key == "protein-tertiary-structure":
-                num_folds_to_run = 1
+                num_folds_to_run = 5
             else:
                 num_folds_to_run = 20 # 20
         elif source_dataset == "openml_ctr23":

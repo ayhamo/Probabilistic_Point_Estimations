@@ -12,6 +12,11 @@ from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.pipeline import Pipeline
 
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -176,62 +181,25 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         train_indices, test_indices = task.get_train_test_split_indices(fold=fold)
 
         if openml_pre_prcoess:
-
+            
+            """
+            currently not needed as i'am using numpy to find catorgical columns
             if dataset_identifier == "361618":
                 categorical_indicator[2] = True  # month
                 categorical_indicator[3] = True  # day
-        
-            categorical_cols = [col for col, is_cat in zip(X.columns, categorical_indicator) if is_cat]
-            numerical_cols = [col for col in X.columns if col not in categorical_cols]
 
-            # from Appendix B.2, code by ChatGPT
-            # 1. Collapse rarest categorical levels
-            # my selection has no such thing.
-            MAX_CATEGORICAL_LEVELS = 1000 # From Appendix B.2
-            for col in categorical_cols:
-                if X[col].nunique() > MAX_CATEGORICAL_LEVELS:
-                    logger.info(f"Collapsing categories for column '{col}' in dataset: {dataset_name} (had {X[col].nunique()} levels)")
-                    top_categories = X[col].value_counts().nlargest(MAX_CATEGORICAL_LEVELS - 1).index
-                    X[col] = X[col].apply(lambda x: x if pd.isna(x) or x in top_categories else '_RARE_')
-
-            # 2. Impute missing categorical values (using a constant placeholder like "_MISSING_")
-            for col in categorical_cols:
-                if X[col].isnull().any():
-                    logger.info(f"Imputing missing values in categorical column '{col}' with '_MISSING_' for dataset {dataset_name}")
-
-                    # Ensure '_MISSING_' is in the categories
-                    if pd.api.types.is_categorical_dtype(X[col]):
-                        X[col] = X[col].cat.add_categories("_MISSING_")  # Add '_MISSING_' as a valid category
-
-                    # Fill missing values with '_MISSING_'
-                    X[col] = X[col].fillna('_MISSING_') # Out-of-range imputation
-
-            # 3. Impute missing numerical features
-            from sklearn.impute import SimpleImputer
-            if X[numerical_cols].isnull().any().any():
-                logger.info(f"Imputing missing values in numerical columns for dataset {dataset_name} using mean.")
-                num_imputer = SimpleImputer(strategy='mean')
-                X[numerical_cols] = num_imputer.fit_transform(X[numerical_cols])
-
-                X = pd.DataFrame(X, columns=attribute_names) # Restore dataframe structure
-
-            # most important one as per the paper!
-            # 4. One-hot encode categorical features
-            if categorical_cols:
-                logger.info(f"One-hot encoding categorical features for dataset {dataset_name}: {categorical_cols}")
-                X = pd.get_dummies(X, columns=categorical_cols, prefix=categorical_cols, dummy_na=False) # dummy_na=False as we imputed 
-                # Convert one-hot encoded bool columns to int (0/1), as pytorch dataset can only handle numerical
-                bool_cols_after_encoding = X.select_dtypes(include=['bool']).columns  # Identify new bool columns
-                X[bool_cols_after_encoding] = X[bool_cols_after_encoding].astype(int)  # Convert to integer
-
+            """
+            X, y = preprocess_openml(X, y, categorical_indicator, attribute_names)
                 
-        if isinstance(y, (pd.Series, pd.DataFrame)):
+        if not isinstance(y, np.ndarray):
             y_np = y.to_numpy()
         else:
             y_np = y
 
-        # X should already be a DataFrame after pd.get_dummies. Convert to NumPy.
-        x_np_full = X.to_numpy()
+        if not isinstance(X, np.ndarray):
+            x_np_full = X.to_numpy()
+        else:
+            x_np_full = X
 
         # split given indicies from openml task
         X_train = x_np_full[train_indices]
@@ -241,8 +209,8 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
 
         # If there are more than 10,000 samples, randomly sample 10,000 indices, 
         # that's becuase TabPFN does not work with more than that.
-        if model == "TabPFN": # TODO i will test 5000 samples instead of 10000 samples
-            X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=5000, random_state=RANDOM_STATE)
+        if model == "TabPFN":
+            X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, random_state=RANDOM_STATE)
 
         if model != "TabResFlow":
             # for all models
@@ -350,6 +318,72 @@ def reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, ran
         y_test = y_test[subsample_indices_test]
 
     return X_train, y_train, X_test, y_test
+
+class CollapseRareLevels(BaseEstimator, TransformerMixin):
+    def __init__(self, threshold=1000):
+        self.threshold = threshold
+        self.level_maps = {}
+
+    def fit(self, X, y=None):
+        for col in X.select_dtypes(include=['object', 'category']).columns:
+            counts = X[col].value_counts()
+            if len(counts) > self.threshold:
+                top_levels = counts.nlargest(self.threshold).index
+                self.level_maps[col] = set(top_levels)
+            else:
+                self.level_maps[col] = None
+        return self
+
+    def transform(self, X):
+        X_ = X.copy()
+        for col, top_levels in self.level_maps.items():
+            if top_levels is not None:
+                X_[col] = X_[col].apply(lambda x: x if x in top_levels else 'RARE_LEVEL')
+        return X_
+
+class HistogramImputer(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        self.histograms = {}
+        for col in X.columns:
+            non_na = X[col].dropna()
+            self.histograms[col] = non_na.values
+        return self
+
+    def transform(self, X):
+        X_ = X.copy()
+        rng = np.random.default_rng()
+        for col in X.columns:
+            mask = X_[col].isna()
+            if mask.any():
+                sampled = rng.choice(self.histograms[col], size=mask.sum(), replace=True)
+                X_.loc[mask, col] = sampled
+        return X_
+    
+def preprocess_openml(X, y, categorical_indicator, attribute_names):
+    if not isinstance(X, pd.DataFrame):
+        X = pd.DataFrame(X, columns=attribute_names)
+
+    # old using openml idecator
+    #categorical_cols = [attribute_names[i] for i, is_cat in enumerate(categorical_indicator) if is_cat]
+    #numerical_cols = [attribute_names[i] for i, is_cat in enumerate(categorical_indicator) if not is_cat]
+
+    # taken from tabpfn example
+    categorical_cols = X.select_dtypes(['object', 'category']).columns.tolist()
+    numerical_cols = [col for col in X.columns if col not in categorical_cols]
+
+    preprocessor = ColumnTransformer([
+        ('cat', Pipeline([
+            ('collapse', CollapseRareLevels(threshold=1000)),
+            ('impute', SimpleImputer(strategy='constant', fill_value='MISSING')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+        ]), categorical_cols),
+        ('num', Pipeline([
+            ('impute', HistogramImputer())
+        ]), numerical_cols)
+    ])
+
+    X_processed = preprocessor.fit_transform(X)
+    return X_processed, y
 
 def load_power_grid_data():
     # Adapated from: https://github.com/gpapamak/maf/blob/master/datasets/power.py
