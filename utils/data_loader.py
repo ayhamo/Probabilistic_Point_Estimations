@@ -74,8 +74,8 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         x_test_np = x_test_raw_df.to_numpy()
         y_test_np = y_test_raw_df.to_numpy().ravel()
         
-        if model == "TabPFN": # TODO i will test 5000 samples instead of 10000 samples
-            X_train, y_train, X_test, y_test = reduce_dataset_size(x_train_full_np, y_train_full_np, x_test_np, y_test_np, max_samples=5000, random_state=RANDOM_STATE)
+        if model == "TabPFN":
+            X_train, y_train, X_test, y_test = reduce_dataset_size(x_train_full_np, y_train_full_np, x_test_np, y_test_np, max_samples=10000, random_state=RANDOM_STATE)
 
         if model != "TabResFlow":
             X_train, y_train, X_test, y_test = x_train_full_np, y_train_full_np, x_test_np, y_test_np
@@ -180,6 +180,16 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         X, y, categorical_indicator, attribute_names = dataset.get_data(target=task.target_name)  
         train_indices, test_indices = task.get_train_test_split_indices(fold=fold)
 
+        # Convert to DataFrame immediately for pre-processing
+        X = pd.DataFrame(X, columns=attribute_names)
+        y = y.values if hasattr(y, 'values') else y  # Ensure numpy array
+
+        # split given indicies from openml task
+        X_train_raw = X.iloc[train_indices]
+        y_train = y[train_indices]
+        X_test_raw = X.iloc[test_indices]
+        y_test = y[test_indices]
+
         if openml_pre_prcoess:
             
             """
@@ -189,23 +199,15 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
                 categorical_indicator[3] = True  # day
 
             """
-            X, y = preprocess_openml(X, y, categorical_indicator, attribute_names)
-                
-        if not isinstance(y, np.ndarray):
-            y_np = y.to_numpy()
-        else:
-            y_np = y
+            # Initialize preprocessor and fit ONLY on training data
+            preprocessor = make_openml_preprocessor(X_train_raw)
+            preprocessor.fit(X_train_raw)
 
-        if not isinstance(X, np.ndarray):
-            x_np_full = X.to_numpy()
+            X_train = preprocessor.transform(X_train_raw)
+            X_test = preprocessor.transform(X_test_raw)
         else:
-            x_np_full = X
-
-        # split given indicies from openml task
-        X_train = x_np_full[train_indices]
-        y_train = y_np[train_indices]
-        X_test = x_np_full[test_indices]
-        y_test = y_np[test_indices]
+            X_train = X_train_raw.to_numpy()
+            X_test = X_test_raw.to_numpy()
 
         # If there are more than 10,000 samples, randomly sample 10,000 indices, 
         # that's becuase TabPFN does not work with more than that.
@@ -321,6 +323,7 @@ def reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, ran
 
 class CollapseRareLevels(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=1000):
+        super().__init__()
         self.threshold = threshold
         self.level_maps = {}
 
@@ -342,11 +345,15 @@ class CollapseRareLevels(BaseEstimator, TransformerMixin):
         return X_
 
 class HistogramImputer(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        super().__init__()
+        self.histograms_ = None 
+
     def fit(self, X, y=None):
-        self.histograms = {}
+        self.histograms_ = {}  # Initialize as empty dict
         for col in X.columns:
             non_na = X[col].dropna()
-            self.histograms[col] = non_na.values
+            self.histograms_[col] = non_na.values
         return self
 
     def transform(self, X):
@@ -354,26 +361,23 @@ class HistogramImputer(BaseEstimator, TransformerMixin):
         rng = np.random.default_rng()
         for col in X.columns:
             mask = X_[col].isna()
-            if mask.any():
-                sampled = rng.choice(self.histograms[col], size=mask.sum(), replace=True)
+            if mask.any() and col in self.histograms_:
+                sampled = rng.choice(self.histograms_[col], size=mask.sum(), replace=True)
                 X_.loc[mask, col] = sampled
         return X_
     
-def preprocess_openml(X, y, categorical_indicator, attribute_names):
-    if not isinstance(X, pd.DataFrame):
-        X = pd.DataFrame(X, columns=attribute_names)
+def make_openml_preprocessor(X_train_raw):
+    from sklearn.pipeline import Pipeline
+    from sklearn.compose import ColumnTransformer
 
-    # old using openml idecator
-    #categorical_cols = [attribute_names[i] for i, is_cat in enumerate(categorical_indicator) if is_cat]
-    #numerical_cols = [attribute_names[i] for i, is_cat in enumerate(categorical_indicator) if not is_cat]
+    # Identify categorical columns
+    categorical_cols = X_train_raw.select_dtypes(['object', 'category']).columns.tolist()
+    numerical_cols = [col for col in X_train_raw.columns if col not in categorical_cols]
 
-    # taken from tabpfn example
-    categorical_cols = X.select_dtypes(['object', 'category']).columns.tolist()
-    numerical_cols = [col for col in X.columns if col not in categorical_cols]
-
-    preprocessor = ColumnTransformer([
+    # Preprocessing pipelines
+    return ColumnTransformer([
         ('cat', Pipeline([
-            ('collapse', CollapseRareLevels(threshold=1000)),
+            #('collapse', CollapseRareLevels(threshold=1000)),
             ('impute', SimpleImputer(strategy='constant', fill_value='MISSING')),
             ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
         ]), categorical_cols),
@@ -381,9 +385,6 @@ def preprocess_openml(X, y, categorical_indicator, attribute_names):
             ('impute', HistogramImputer())
         ]), numerical_cols)
     ])
-
-    X_processed = preprocessor.fit_transform(X)
-    return X_processed, y
 
 def load_power_grid_data():
     # Adapated from: https://github.com/gpapamak/maf/blob/master/datasets/power.py

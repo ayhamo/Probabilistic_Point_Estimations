@@ -19,8 +19,8 @@ if __name__ == '__main__':
 
     dataset_sources = ["uci", "openml_ctr23", "multivariate"]
     train_TabResFlow = False
-    train_TabPFN = False
-    train_XGBoost = True
+    train_TabPFN = True
+    train_XGBoost = False
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline
