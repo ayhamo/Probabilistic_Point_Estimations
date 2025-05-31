@@ -191,14 +191,7 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         y_test = y[test_indices]
 
         if openml_pre_prcoess:
-            
-            """
-            currently not needed as i'am using numpy to find catorgical columns
-            if dataset_identifier == "361618":
-                categorical_indicator[2] = True  # month
-                categorical_indicator[3] = True  # day
 
-            """
             # Initialize preprocessor and fit ONLY on training data
             preprocessor = make_openml_preprocessor(X_train_raw)
             preprocessor.fit(X_train_raw)
@@ -219,7 +212,7 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
             return X_train, y_train, X_test, y_test
 
         else:
-                
+            # since TabResFlow UCI had target scaling, i also do target scaling here, only valid for TabResFlow
             logger.info(f"pre-processing {dataset_identifier} with feature/taget scaling of [-1,1].")
         
             # Reshape y arrays if they are 1D to be 2D (N, 1) for scalers
@@ -377,7 +370,7 @@ def make_openml_preprocessor(X_train_raw):
     # Preprocessing pipelines
     return ColumnTransformer([
         ('cat', Pipeline([
-            #('collapse', CollapseRareLevels(threshold=1000)),
+            ('collapse', CollapseRareLevels(threshold=1000)),
             ('impute', SimpleImputer(strategy='constant', fill_value='MISSING')),
             ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
         ]), categorical_cols),

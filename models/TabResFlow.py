@@ -1,6 +1,6 @@
 from configs.logger_config import global_logger as logger
 
-from configs.config import DATASETS, DATASET_MODEL_CONFIGS, device
+from configs.config import DATASETS, RANDOM_STATE, DATASET_MODEL_CONFIGS, device
 from utils.data_loader import load_preprocessed_data
 import utils.evaluation as evaluation
 
@@ -512,3 +512,174 @@ def run_TabResFlow_pipeline(
     logger.info("===== ***** END OF OVERALL SUMMARY ***** =====")
 
     return pd.DataFrame.from_dict(overall_results_summary, orient='index')
+
+
+def run_tabresflow_optuna(
+    source_dataset: str,
+    datasets_to_optimize: list,
+    n_trials_optuna: int = 3,
+    hpo_fold_idx: int = 0,
+    default_batch_size_for_hpo_data_loading: int = 1024 # Initial BS for loading data
+):
+    """
+    Runs Optuna hyperparameter optimization for TabResFlow on specified datasets.
+    Hyperparameters are defined and tuned within this function.
+
+    Args:
+        source_dataset (str): The source of the datasets.
+        datasets_to_optimize (list): A list of dataset keys (strings) for HPO.
+        n_trials_optuna (int): Number of Optuna trials.
+        hpo_fold_idx (int): Fold index for HPO data.
+        default_batch_size_for_hpo_data_loading (int): Batch size used to load the HPO
+                                                       dataset initially. If batch_size is
+                                                       tuned by Optuna, DataLoaders will
+                                                       be re-created in the objective.
+    Returns:
+        dict: Best hyperparameters and metric value per dataset.
+    """
+
+    import optuna
+
+    all_best_hyperparams = {}
+
+    for dataset_key in datasets_to_optimize:
+        logger.info(f"===== Starting Optuna HPO for TabResFlow on dataset: {dataset_key}, Fold: {hpo_fold_idx} =====")
+
+        train_loader_hpo_base, val_loader_hpo_base, _, target_scaler_hpo = \
+            load_preprocessed_data("TabResFlow", source_dataset, dataset_key, hpo_fold_idx,
+                                   batch_size=default_batch_size_for_hpo_data_loading,
+                                   openml_pre_prcoess=True)
+
+        num_numerical_features = train_loader_hpo_base.dataset.tensors[0].shape[1]
+        effective_scale_for_density_transform = target_scaler_hpo.scale_[0] if target_scaler_hpo is not None else 1.0
+
+        # Default Fixed Model Hyperparameters (not tuned by Optuna in this setup)
+        default_fixed_model_hps = {
+            'numerical_encoder_intermediate_dim': 100,
+            'resnet_block_hidden_factor': 1.0,
+            'categorical_cardinalities': [],  
+        }
+
+        def objective(trial: optuna.trial.Trial):
+            if device.type == 'cuda': torch.cuda.empty_cache()
+
+            current_model_hps = copy.deepcopy(default_fixed_model_hps)
+            
+            # Model Hyperparameters to tune (mapped from paper's list)
+            current_model_hps['resnet_main_processing_dim'] = trial.suggest_int('resnet_main_processing_dim', 32, 1024, log=True) 
+            current_model_hps['embedding_dim_per_feature'] = trial.suggest_int('embedding_dim_per_feature', 32, 1024, log=True)
+            current_model_hps['resnet_depth'] = trial.suggest_int('resnet_depth', 1, 20)
+            current_model_hps['resnet_activation_dropout'] = trial.suggest_float('resnet_activation_dropout', 0.0, 0.5)
+            current_model_hps['resnet_residual_dropout'] = trial.suggest_float('resnet_residual_dropout', 0.0, 0.5)
+            current_model_hps['flow_transforms'] = trial.suggest_int('flow_transforms', 1, 20)
+            current_model_hps['flow_bins'] = trial.suggest_int('flow_bins', 6, 20)
+            current_model_hps['flow_mlp_layers_in_transform'] = trial.suggest_int('flow_mlp_layers_in_transform', 1, 12)
+
+
+            # Training Hyperparameters to tune
+            current_train_hps = {}
+            current_train_hps['lr'] = trial.suggest_float('lr', 1e-5, 1e-2, log=True)
+
+            current_train_hps['batch_size'] = trial.suggest_categorical('batch_size', [1024, 2048])
+            current_train_hps['weight_decay'] = 1e-4
+
+            if source_dataset != "openml_ctr23":
+                current_train_hps['hpo_max_epochs'] = DATASET_MODEL_CONFIGS[dataset_key]["TabResFlow_TRAIN_HYPERPARAMS"].get('num_epochs', 400)
+                current_train_hps['hpo_patience'] = DATASET_MODEL_CONFIGS[dataset_key]["TabResFlow_TRAIN_HYPERPARAMS"].get('patience_early_stopping', 400) / 4
+            else:
+                current_train_hps['hpo_max_epochs'] = 400
+                current_train_hps['hpo_patience'] = 100
+
+            # Prepare DataLoaders if batch_size is tuned
+            train_loader_trial = train_loader_hpo_base
+            val_loader_trial = val_loader_hpo_base
+
+            if current_train_hps['batch_size'] != default_batch_size_for_hpo_data_loading:
+                logger.debug(f"Recreating DataLoaders for batch_size {current_train_hps['batch_size']}")
+                train_loader_trial, val_loader_trial, _, _ = \
+                    load_preprocessed_data("TabResFlow", source_dataset, dataset_key, hpo_fold_idx,
+                                            batch_size=current_train_hps['batch_size'],
+                                            openml_pre_prcoess=True)
+
+            model_init_params = {
+                'num_numerical_features': num_numerical_features,
+                **current_model_hps,
+                'target_scaler_actual_scale': effective_scale_for_density_transform,
+            }
+            
+            model = TabResFlow(**model_init_params)
+            
+            val_metric_value, _ = model.fit(
+                train_loader=train_loader_trial,
+                val_loader=val_loader_trial,
+                lr=current_train_hps['lr'],
+                weight_decay=current_train_hps['weight_decay'],
+                num_epochs=current_train_hps['hpo_max_epochs'],
+                patience_early_stopping=current_train_hps['hpo_patience'],
+                model_save_path=None,
+                dataset_key_for_save=None
+            )
+
+            if np.isnan(val_metric_value) or np.isinf(val_metric_value):
+                logger.warning(f"Trial {trial.number} for {dataset_key} resulted in NaN/Inf metric: {val_metric_value}. Pruning or returning high value.")
+                return float('inf') 
+
+            return val_metric_value # NLL in this case always
+            
+
+        study = optuna.create_study(direction='minimize')
+        
+        optuna_original_verbosity = optuna.logging.get_verbosity()
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+
+        study.optimize(objective, n_trials=n_trials_optuna,
+                        callbacks=[lambda st, tr: torch.cuda.empty_cache() if device.type == 'cuda' else None])
+
+        
+        optuna.logging.set_verbosity(optuna_original_verbosity)
+
+        logger.info(f"  Optuna HPO finished for {dataset_key}.")
+        logger.info(f"  Best trial number: {study.best_trial.number}")
+        logger.info(f"  Best Validation NLL: {study.best_value:.4f}")
+        
+        best_hp_subset_optuna = study.best_params # Only contains HPs Optuna tuned
+        
+        # Construct the full set of best parameters
+        final_best_model_hps = copy.deepcopy(default_fixed_model_hps)
+        final_best_train_hps = {} # Start fresh for train HPs
+
+        for hp_name, hp_value in best_hp_subset_optuna.items():
+            # Check against keys used in trial.suggest_...
+            if hp_name in ['resnet_main_processing_dim', 'embedding_dim_per_feature', 'resnet_depth',
+                           'resnet_activation_dropout', 'resnet_residual_dropout', 'flow_transforms']:
+                final_best_model_hps[hp_name] = hp_value
+            elif hp_name in ['lr', 'batch_size', 'weight_decay']:
+                final_best_train_hps[hp_name] = hp_value
+        
+        # Add non-tuned but essential train params
+        final_best_train_hps['num_epochs'] = 400
+        final_best_train_hps['patience_early_stopping'] =  100
+
+        logger.info(f"  Best Suggested Model Hyperparameters: {final_best_model_hps}")
+        logger.info(f"  Best Suggested Training Hyperparameters: {final_best_train_hps}")
+
+        all_best_hyperparams[dataset_key] = {
+            'best_model_params': final_best_model_hps,
+            'best_train_params': final_best_train_hps,
+            'best_value': study.best_value,
+        }
+        logger.info("===================================================================\n")
+        if device.type == 'cuda': torch.cuda.empty_cache()
+
+
+    logger.info("===== ***** SUMMARY OF OPTUNA HPO RESULTS ***** =====")
+    for ds_key, result in all_best_hyperparams.items():
+        dataset_name = DATASETS.get(source_dataset, {}).get(ds_key, {}).get('name', ds_key)
+        logger.info(f"--- Dataset: {dataset_name} ({ds_key}) ---")
+        logger.info(f"  Best NLL: {result['best_value']:.4f}")
+        logger.info(f"  Best Train Hyperparameters: {result['best_train_params']}\n")
+        logger.info(f"  Best Model parameters: {result['best_model_params']}\n")
+    logger.info("===== ***** END OF OPTUNA HPO SUMMARY ***** =====")
+    
+    return all_best_hyperparams
