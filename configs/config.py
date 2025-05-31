@@ -199,7 +199,7 @@ DATASET_MODEL_CONFIGS = {
             'categorical_cardinalities': None,
         },
         "TabResFlow_TRAIN_HYPERPARAMS": {
-            'lr': 0.03, 'weight_decay': 1e-4, 'num_epochs': 2,
+            'lr': 0.03, 'weight_decay': 1e-4, 'num_epochs': 400,
             'patience_early_stopping': 100, 'batch_size': 1024
         }
     },

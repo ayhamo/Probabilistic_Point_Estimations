@@ -392,7 +392,7 @@ def run_TabResFlow_pipeline(
             else:
                 num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
-            num_folds_to_run = 1#20
+            num_folds_to_run = 10
             MODEL_HYPERPARAMS = DATASET_MODEL_CONFIGS["openML-general"]["TabResFlow_MODEL_HYPERPARAMS"]
             TRAIN_HYPERPARAMS = DATASET_MODEL_CONFIGS["openML-general"]["TabResFlow_TRAIN_HYPERPARAMS"]
  
