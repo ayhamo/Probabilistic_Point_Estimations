@@ -209,6 +209,12 @@ def calculate_and_log_regression_metrics_on_test(
                     batch_samples_original = np.nan_to_num(batch_samples_original, nan=np.nanmean(batch_samples_original))
                     logger.warning("NaN values have been imputed with the mean to avoid issues.")
 
+            # Handle Inf values by replacing them with the max finite value in the array
+            if np.isinf(batch_samples_original).any():
+                max_finite_value = np.nanmax(batch_samples_original[np.isfinite(batch_samples_original)])
+                batch_samples_original = np.where(np.isinf(batch_samples_original), max_finite_value, batch_samples_original)
+                logger.warning("Inf values have been replaced with the maximum finite value in the dataset.")
+
             batch_modes_original = np.array([
                 get_peak_prediction(
                     batch_samples_original[i], 

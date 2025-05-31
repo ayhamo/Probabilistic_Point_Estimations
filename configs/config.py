@@ -47,8 +47,8 @@ DATASETS = {
     },
     # OpenML-CTR23 datasets https://www.openml.org/search?type=study&study_type=undefined&sort=tasks_included&id=353
     "openml_ctr23": {
-        "361251": {"name": "grid_stability"},
-        "361252": {"name": "video_transcoding"}, #!
+        #"361251": {"name": "grid_stability"}, #temp fix to run TabResFlow without first 2
+        #"361252": {"name": "video_transcoding"}, #!
         "361253": {"name": "wave_energy"},
         "361254": {"name": "sarcos"},
         "361255": {"name": "california_housing"},
@@ -179,9 +179,9 @@ DATASET_MODEL_CONFIGS = {
     },
     "yacht": {
         "TabResFlow_MODEL_HYPERPARAMS": {
-            'embedding_dim_per_feature': 119, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 339, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
-            'resnet_activation_dropout': 0.02, 'resnet_residual_dropout': 0.1,
+            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 128, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.3, 'resnet_residual_dropout': 0.3,
             'flow_transforms': 13, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
