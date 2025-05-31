@@ -180,7 +180,7 @@ def calculate_and_log_regression_metrics_on_test(
     all_y_mode_predictions_original = [] # Storing mode predictions
     
     # default for find_peaks_parameters, used in _calculate_rmse_at_k
-    find_peaks_params_authors = {"height": 0.1} 
+    find_peaks_params = {"height": 0.1} 
     
     model.eval() 
     with torch.no_grad():
@@ -205,10 +205,14 @@ def calculate_and_log_regression_metrics_on_test(
             )
             if batch_samples_original.shape[0] == 0: continue
 
+            if np.isnan(batch_samples_original).any():
+                    batch_samples_original = np.nan_to_num(batch_samples_original, nan=np.nanmean(batch_samples_original))
+                    logger.warning("NaN values have been imputed with the mean to avoid issues.")
+
             batch_modes_original = np.array([
                 get_peak_prediction(
                     batch_samples_original[i], 
-                    find_peaks_parameters=find_peaks_params_authors, 
+                    find_peaks_parameters=find_peaks_params, 
                     n_peaks_to_return=1
                 )[0] # Get the first (primary) peak
                 for i in range(batch_samples_original.shape[0])

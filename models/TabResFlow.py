@@ -382,18 +382,19 @@ def run_TabResFlow_pipeline(
 
     for dataset_key, dataset_info_dict in datasets_to_run.items():
         dataset_name = dataset_info_dict.get('name', dataset_key)
-
-        MODEL_HYPERPARAMS = DATASET_MODEL_CONFIGS[dataset_key]["TabResFlow_MODEL_HYPERPARAMS"]
-        TRAIN_HYPERPARAMS = DATASET_MODEL_CONFIGS[dataset_key]["TabResFlow_TRAIN_HYPERPARAMS"]
         
         if source_dataset == "uci":
+            MODEL_HYPERPARAMS = DATASET_MODEL_CONFIGS[dataset_key]["TabResFlow_MODEL_HYPERPARAMS"]
+            TRAIN_HYPERPARAMS = DATASET_MODEL_CONFIGS[dataset_key]["TabResFlow_TRAIN_HYPERPARAMS"]
+
             if dataset_key == "protein-tertiary-structure":
                 num_folds_to_run = 5
             else:
                 num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
-            #TODO check hyperparamters for each dataset
-            num_folds_to_run = 1#0
+            num_folds_to_run = 1#20
+            MODEL_HYPERPARAMS = DATASET_MODEL_CONFIGS["openML-general"]["TabResFlow_MODEL_HYPERPARAMS"]
+            TRAIN_HYPERPARAMS = DATASET_MODEL_CONFIGS["openML-general"]["TabResFlow_TRAIN_HYPERPARAMS"]
  
 
         all_folds_test_nll = []

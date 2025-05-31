@@ -1,12 +1,8 @@
 '''
 TODO:
 
-
-1. put all ctr23 datasets, and put a table FOR ALL DATASETS train size, test size, number of input features, number of output feautres, number of catorgical features, number missing feautres, percentage missing
-2. look at kiran paper new and update
-3. talk to kiran and see his implemtnation and compare with folding
-
-4. implement tabpfn, xgboost, catboost
+1. implement tabpfn, xgboost, catboost
+2. Implement TabResNet
 
 '''
 
@@ -14,11 +10,11 @@ if __name__ == '__main__':
 
     dataset_sources = ["uci", "openml_ctr23", "multivariate"]
 
-    optuna = True
+    optuna = False
     optuna_metrics_optimize = ["Mean NLL", "MAE", "MSE", "RMSE", "MAPE"]
 
-    train_TabResFlow = False
-    train_TabPFN = True
+    train_TabResFlow = True
+    train_TabPFN = False
     train_XGBoost = False
     train_CatBoost = False
 
@@ -35,8 +31,8 @@ if __name__ == '__main__':
         )
         else:
             TabResFlow_summary_df = run_TabResFlow_pipeline(
-            source_dataset = dataset_sources[0],
-            test_datasets = ["361622", ], # can specify a list of dataset key to test ie "yacht", otherwise None
+            source_dataset = dataset_sources[1],
+            test_datasets = ["361253", "361616", "361268"] ,#["361622", ], # can specify a list of dataset key to test, otherwise None
             # base_model_save_path_template="trained_models/tabresflow_best_{dataset_key}_fold{fold_idx}.pth"
         )
 

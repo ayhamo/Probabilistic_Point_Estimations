@@ -166,10 +166,10 @@ DATASET_MODEL_CONFIGS = {
     },
     "wine-quality-red": {
         "TabResFlow_MODEL_HYPERPARAMS": {
-            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 128, 'resnet_depth': 4, 'resnet_block_hidden_factor': 1.0,
-            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
-            'flow_transforms': 3, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'embedding_dim_per_feature': 93, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 51, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.49,
+            'flow_transforms': 13, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
         "TabResFlow_TRAIN_HYPERPARAMS": {
@@ -179,10 +179,10 @@ DATASET_MODEL_CONFIGS = {
     },
     "yacht": {
         "TabResFlow_MODEL_HYPERPARAMS": {
-            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
-            'resnet_main_processing_dim': 128, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
-            'resnet_activation_dropout': 0.3, 'resnet_residual_dropout': 0.3,
-            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'embedding_dim_per_feature': 119, 'numerical_encoder_intermediate_dim': 100,
+            'resnet_main_processing_dim': 339, 'resnet_depth': 3, 'resnet_block_hidden_factor': 1.0,
+            'resnet_activation_dropout': 0.02, 'resnet_residual_dropout': 0.1,
+            'flow_transforms': 13, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
         "TabResFlow_TRAIN_HYPERPARAMS": {
@@ -190,17 +190,17 @@ DATASET_MODEL_CONFIGS = {
             'patience_early_stopping': 400, 'batch_size': 1024
         }
     },
-    "361622": {
+    "openML-general": {
         "TabResFlow_MODEL_HYPERPARAMS": {
-            'embedding_dim_per_feature': 64, 'numerical_encoder_intermediate_dim': 100,
+            'embedding_dim_per_feature': 128, 'numerical_encoder_intermediate_dim': 100,
             'resnet_main_processing_dim': 128, 'resnet_depth': 6, 'resnet_block_hidden_factor': 1.0,
             'resnet_activation_dropout': 0.2, 'resnet_residual_dropout': 0.2,
-            'flow_transforms': 5, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
+            'flow_transforms': 10, 'flow_mlp_layers_in_transform': 2, 'flow_bins': 8,
             'categorical_cardinalities': None,
         },
         "TabResFlow_TRAIN_HYPERPARAMS": {
-            'lr': 0.03, 'weight_decay': 1e-4, 'num_epochs': 400,
-            'patience_early_stopping': 400, 'batch_size': 1024
+            'lr': 0.03, 'weight_decay': 1e-4, 'num_epochs': 2,
+            'patience_early_stopping': 100, 'batch_size': 1024
         }
     },
 }
