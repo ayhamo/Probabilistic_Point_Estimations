@@ -37,10 +37,8 @@ def initialize_train_autotabpfn_regressor(X_train, y_train, **kwargs):
 def tabpfn_nll(tabpfn_regressor_model, X_test, y_test):
     """
     Calculates the model-based Negative Log-Likelihood (NLL) for a fitted TabPFNRegressor.
-    Returns a dictionary with 'Mean NLL' and 'Total NLL'.
+    Returns a single value: avg_nll (Mean NLL).
     """
-    results_nll = {'Mean NLL': np.nan, 'Total NLL': np.nan}
-
     y_test_values = y_test.values if isinstance(y_test, pd.Series) else np.asarray(y_test)
     
     full_output = tabpfn_regressor_model.predict(X_test, output_type="full")
@@ -53,34 +51,17 @@ def tabpfn_nll(tabpfn_regressor_model, X_test, y_test):
     nll_per_sample = criterion_object.forward(logits=predicted_logits, y=y_test_tensor)
     nll_per_sample_cpu = nll_per_sample.cpu().detach().numpy()
 
-    # Calculate mean and total NLL
-    mean_nll_val = np.mean(nll_per_sample_cpu)
-    total_nll_val = np.sum(nll_per_sample_cpu)
+    # Calculate Mean NLL
+    avg_nll = np.mean(nll_per_sample_cpu)
     
     INF_NLL_PLACEHOLDER = 1e20
-    # Check for NaN, Inf in Mean NLL and replace if necessary
-    if np.isnan(mean_nll_val):
-        # logger.warning(f"Calculated Mean NLL is NaN for a sample. Setting to placeholder NaN.") # Optional logging
-        results_nll['Mean NLL'] = np.nan
-    elif np.isinf(mean_nll_val):
-        # logger.warning(f"Calculated Mean NLL is Inf. Replacing with placeholder value: {INF_NLL_PLACEHOLDER}") # Optional logging
-        results_nll['Mean NLL'] = INF_NLL_PLACEHOLDER if mean_nll_val > 0 else -INF_NLL_PLACEHOLDER # Handle -inf as well if it can occur
-    else:
-        results_nll['Mean NLL'] = mean_nll_val
+    # Check for NaN, Inf in avg_nll and replace if necessary
+    if np.isnan(avg_nll):
+        avg_nll = np.nan
+    elif np.isinf(avg_nll):
+        avg_nll = INF_NLL_PLACEHOLDER if avg_nll > 0 else -INF_NLL_PLACEHOLDER
 
-    # Check for NaN, Inf in Total NLL and replace if necessary
-    if np.isnan(total_nll_val):
-        # logger.warning(f"Calculated Total NLL is NaN for a sample. Setting to placeholder NaN.") # Optional logging
-        results_nll['Total NLL'] = np.nan
-    elif np.isinf(total_nll_val):
-        # logger.warning(f"Calculated Total NLL is Inf. Replacing with placeholder value: {INF_NLL_PLACEHOLDER * len(y_test_values) if len(y_test_values) > 0 else INF_NLL_PLACEHOLDER}") # Optional logging
-        # Scale placeholder for total NLL, or use a very large flat value
-        placeholder_total_nll = INF_NLL_PLACEHOLDER * len(y_test_values) if len(y_test_values) > 0 and np.isfinite(len(y_test_values)) else INF_NLL_PLACEHOLDER
-        results_nll['Total NLL'] = placeholder_total_nll if total_nll_val > 0 else -placeholder_total_nll
-    else:
-        results_nll['Total NLL'] = total_nll_val
-
-    return results_nll
+    return avg_nll
 
 
 def evaluate_tabpfn_model(model, X_test, y_test, y_pred, fold_idx, model_key):
@@ -93,19 +74,18 @@ def evaluate_tabpfn_model(model, X_test, y_test, y_pred, fold_idx, model_key):
     logger.info(f"Fold {fold_idx+1} Test Regression Metrics: {regression_metrics}")
 
     if model_key != "autotabpfn_regressor":
-        nll_metrics = tabpfn_nll(model, X_test, y_test)
+        avg_nll = tabpfn_nll(model, X_test, y_test)
 
-        logger.info(f"Fold {fold_idx+1} {model_key} Model Test Mean NLL: {nll_metrics['Mean NLL']:.4f}")
-        logger.info(f"Fold {fold_idx+1} {model_key} Model Test Total NLL: {nll_metrics['Total NLL']:.4f}\n")
+        logger.info(f"Fold {fold_idx+1} {model_key} Model Test Mean NLL: {avg_nll:.4f}")
     else:
         logger.info(f"{model_key} NLL score cannot be computed\n")
-        nll_metrics = {"Mean NLL": np.nan, "Total NLL": np.nan}
+        avg_nll = 0
 
-    return nll_metrics, regression_metrics
+    return avg_nll, regression_metrics
 
 def run_TabPFN_pipeline(
     source_dataset :str = "openml_ctr23",
-    test_single_dataset: str = None,
+    test_datasets = None,
     models_train_types = ["tabpfn_regressor", "autotabpfn_regressor"],
     base_model_save_path_template : str = None # "trained_models/tabpfn_best_{dataset_key}.pth"
     ):
@@ -114,7 +94,7 @@ def run_TabPFN_pipeline(
 
     Args:
         source_dataset_type (str): The source of the datasets (e.g., "openml_ctr23").
-        datasets_to_process (str) : provide single dataset name configred in config.py to test model on
+        test_datasets (list) : provide a list of dataset name configred in config.py to test model on
         models_train_types (list) : a list that contains model to train , options include tabpfn_regressor and autotabpfn_regressor
         base_model_save_path_template (str): A template string for loading pre-trained models
                                                       Example: "trained_models/tabpfn_best_{dataset_key}.pth"
@@ -123,17 +103,20 @@ def run_TabPFN_pipeline(
         pandas.DataFrame: A DataFrame summarizing the evaluation results across all processed datasets.
     """
 
-    # For looping through all datasets in the source
-    datasets_to_run = DATASETS.get(source_dataset, {})
-    overall_results_summary = {}
+    datasets_to_run = {}
     
-    if test_single_dataset:
-        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_dataset, None)
-        if datasets_to_run:
-            datasets_to_run = {test_single_dataset: datasets_to_run}
-        else:
-            print("Could not find a default dataset for testing. Please check DATASETS structure.")
-            datasets_to_run = {}
+    # override all datasets if a test list is given
+    if test_datasets:
+        for dataset_key in test_datasets:
+            dataset_value = DATASETS.get(source_dataset, {}).get(dataset_key, None)
+            if dataset_value:
+                datasets_to_run[dataset_key] = dataset_value
+            else:
+                print("Could not find a default dataset for testing. Please check DATASETS structure.")
+                datasets_to_run = {}
+    else:
+        # For looping through all datasets in the source
+        datasets_to_run = DATASETS.get(source_dataset, {})
 
     overall_results_summary = {} # To store aggregated results for each dataset and model 
     # For final aggregation across all datasets
@@ -146,9 +129,9 @@ def run_TabPFN_pipeline(
             if dataset_key == "protein-tertiary-structure":
                 num_folds_to_run = 5
             else:
-                num_folds_to_run = 20 # 20
+                num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
-            num_folds_to_run = 10 # 10
+            num_folds_to_run = 10
 
         dataset_fold_metrics = {
             model_type: {
@@ -168,19 +151,19 @@ def run_TabPFN_pipeline(
                 X_train, y_train, X_test, y_test = \
                     load_preprocessed_data("TabPFN", source_dataset, dataset_key, fold_idx,
                             batch_size=0, # batch_size is not used, so 0
-                            openml_pre_prcoess=False)
+                            openml_pre_prcoess=True)
                 
-                logger.info(f"Starting training process for {dataset_name}, Fold {fold_idx+1}...")
+                logger.info(f"Starting training process for {dataset_name}, Fold {fold_idx}...")
 
                 model_tabpfn = initialize_train_tabpfn_regressor(X_train, y_train)
                 logger.info("TabPFN Training finished.")
 
-                logger.info(f"Evaluating on test set for {dataset_name}, Fold {fold_idx+1}:")
+                logger.info(f"Evaluating on test set for {dataset_name}, Fold {fold_idx}:")
                 y_pred = model_tabpfn.predict(X_test, output_type="mean") # Get mean predictions for standard metrics
 
-                nll_metrics, reg_metrics = evaluate_tabpfn_model(model_tabpfn, X_test, y_test, y_pred, fold_idx, model_key = model_key)
+                avg_nll, reg_metrics = evaluate_tabpfn_model(model_tabpfn, X_test, y_test, y_pred, fold_idx, model_key = model_key)
 
-                dataset_fold_metrics[model_key]['nll'].append(nll_metrics.get('Mean NLL', np.nan))
+                dataset_fold_metrics[model_key]['nll'].append(avg_nll)
                 dataset_fold_metrics[model_key]['mae'].append(reg_metrics.get('MAE', np.nan))
                 dataset_fold_metrics[model_key]['mse'].append(reg_metrics.get('MSE', np.nan))
                 dataset_fold_metrics[model_key]['rmse'].append(reg_metrics.get('RMSE', np.nan))
@@ -212,7 +195,6 @@ def run_TabPFN_pipeline(
 
 
             
-
        # --- AGGREGATED RESULTS for the current dataset ---
         logger.info(f"===== AGGREGATED RESULTS for {dataset_name} ({dataset_key}) over {num_folds_to_run} Folds =====")
         overall_results_summary[dataset_key] = {
@@ -225,8 +207,12 @@ def run_TabPFN_pipeline(
             if not any(metrics_dict.values()): # Skip if no metrics were collected (e.g. model_type not run)
                 continue
 
-            mean_nll = np.nanmean(metrics_dict['nll']) if metrics_dict['nll'] else np.nan
-            std_nll = np.nanstd(metrics_dict['nll']) if metrics_dict['nll'] else np.nan
+            # Filter out broken NLL folds
+            valid_nll_values = [nll for nll in metrics_dict['nll'] if nll < 1e20]
+            broken_folds_count = len(metrics_dict['nll']) - len(valid_nll_values)
+
+            mean_nll = np.nanmean(valid_nll_values) if valid_nll_values else np.nan
+            std_nll = np.nanstd(valid_nll_values) if valid_nll_values else np.nan
             mean_mse = np.nanmean(metrics_dict['mse']) if metrics_dict['mse'] else np.nan
             std_mse = np.nanstd(metrics_dict['mse']) if metrics_dict['mse'] else np.nan
             mean_rmse = np.nanmean(metrics_dict['rmse']) if metrics_dict['rmse'] else np.nan
@@ -235,9 +221,12 @@ def run_TabPFN_pipeline(
             std_mae = np.nanstd(metrics_dict['mae']) if metrics_dict['mae'] else np.nan
             mean_mape = np.nanmean(metrics_dict['mape']) if metrics_dict['mape'] else np.nan
             std_mape = np.nanstd(metrics_dict['mape']) if metrics_dict['mape'] else np.nan
-            
+
+            # Append '*' if there were broken folds
+            broken_folds_indicator = f" *({broken_folds_count} broken folds)" if broken_folds_count > 0 else ""
+
             logger.info(f"--- Model Type: {model_type} ---")
-            logger.info(f"  Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}")
+            logger.info(f"  Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}{broken_folds_indicator}")
             logger.info(f"  Average Test MSE: {mean_mse:.4f} ± {std_mse:.4f}")
             logger.info(f"  Average Test RMSE: {mean_rmse:.4f} ± {std_rmse:.4f}")
             logger.info(f"  Average Test MAE: {mean_mae:.4f} ± {std_mae:.4f}")
@@ -249,6 +238,7 @@ def run_TabPFN_pipeline(
                 'RMSE_mean': mean_rmse, 'RMSE_std': std_rmse,
                 'MAE_mean': mean_mae, 'MAE_std': std_mae,
                 'MAPE_mean': mean_mape, 'MAPE_std': std_mape,
+                'broken_folds': broken_folds_count  # Keeping track of broken folds separately
             }
             # Store for final aggregation
             if model_type in final_aggregation_data:

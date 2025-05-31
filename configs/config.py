@@ -61,7 +61,7 @@ DATASETS = {
         "361264": {"name": "socmob"}, #!
         "361266": {"name": "kings_county"}, #!
         "361267": {"name": "brazilian_houses"}, #!
-        #"361268": {"name": "fps_benchmark"}, # this dataset really is bad, one hoy encoding it gives 958 columns!
+        "361268": {"name": "fps_benchmark"}, # this dataset really is bad, one hoy encoding it gives 958 columns!
         "361269": {"name": "health_insurance"},
         "361272": {"name": "fifa"}, #!
         "361234": {"name": "abalone"},

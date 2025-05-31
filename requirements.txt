@@ -11,6 +11,7 @@ scikit-learn
 torch torchvision --index-url https://download.pytorch.org/whl/cu126
 zoku
 hyperopt
+optuna
 
 tabpfn
 git+https://github.com/priorlabs/tabpfn-extensions.git

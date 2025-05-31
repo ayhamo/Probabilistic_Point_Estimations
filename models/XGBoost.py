@@ -80,7 +80,7 @@ def evaluate_xgboost_model(model, X_test, y_test, y_pred):
 
 def run_XGBoost_pipeline(
     source_dataset: str = "openml_ctr23",
-    test_single_dataset: str = None,
+    test_datasets = None,
     base_model_save_path_template : str = None # "trained_models/xgboost_best_{dataset_key}.pth"
     ):
     """
@@ -88,7 +88,7 @@ def run_XGBoost_pipeline(
 
     Args:
         source_dataset_type (str): The source of the datasets (e.g., "openml_ctr23").
-        datasets_to_process : provide single dataset name configred in config.py to test model on
+        test_datasets (list) : provide a list of dataset name configred in config.py to test model on
         base_model_save_path_template (str): A template string for loading pre-trained models
                                                       Example: "trained_models/xgboost_best_{dataset_key}.pth"
 
@@ -97,17 +97,20 @@ def run_XGBoost_pipeline(
         pandas.DataFrame: A DataFrame summarizing the evaluation results across all processed datasets.
     """
 
-    # For looping through all datasets in the source
-    datasets_to_run = DATASETS.get(source_dataset, {})
-    overall_results_summary = {}
+    datasets_to_run = {}
     
-    if test_single_dataset:
-        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_dataset, None)
-        if datasets_to_run:
-            datasets_to_run = {test_single_dataset: datasets_to_run}
-        else:
-            print("Could not find a default dataset for testing. Please check DATASETS structure.")
-            datasets_to_run = {}
+    # override all datasets if a test list is given
+    if test_datasets:
+        for dataset_key in test_datasets:
+            dataset_value = DATASETS.get(source_dataset, {}).get(dataset_key, None)
+            if dataset_value:
+                datasets_to_run[dataset_key] = dataset_value
+            else:
+                print("Could not find a default dataset for testing. Please check DATASETS structure.")
+                datasets_to_run = {}
+    else:
+        # For looping through all datasets in the source
+        datasets_to_run = DATASETS.get(source_dataset, {})
 
     overall_results_summary = {} # To store aggregated results for each dataset
     
@@ -118,9 +121,9 @@ def run_XGBoost_pipeline(
             if dataset_key == "protein-tertiary-structure":
                 num_folds_to_run = 5
             else:
-                num_folds_to_run = 20 # 20
+                num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
-            num_folds_to_run = 10 # 10
+            num_folds_to_run = 10
 
         # taken from OpenML-CTR23 paper
         xgboost_params_for_dataset = {
@@ -140,7 +143,7 @@ def run_XGBoost_pipeline(
         dataset_fold_metrics = {'nll': [], 'mae': [], 'mse': [], 'rmse': [], 'mape': []}
 
         for fold_idx in range(num_folds_to_run):
-            logger.info(f"--- Processing Fold {fold_idx+1}/{num_folds_to_run} for dataset: {dataset_key} ---")
+            logger.info(f"--- Processing Fold {fold_idx}/{num_folds_to_run} for dataset: {dataset_key} ---")
             
             X_train, y_train, X_test, y_test = \
                 load_preprocessed_data("XGBoost", source_dataset, dataset_key, fold_idx,

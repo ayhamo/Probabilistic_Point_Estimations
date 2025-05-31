@@ -78,7 +78,7 @@ def evaluate_catboost_model(model, X_test, y_test, y_pred, fold_idx):
 
 def run_CatBoost_pipeline(
     source_dataset: str = "openml_ctr23",
-    test_single_dataset: str = None,
+    test_datasets = None,
     base_model_save_path_template : str = None # "trained_models/CatBoost_best_{dataset_key}.pth"
     ):
     """
@@ -86,7 +86,7 @@ def run_CatBoost_pipeline(
 
     Args:
         source_dataset_type (str): The source of the datasets (e.g., "openml_ctr23").
-        datasets_to_process : provide single dataset name configred in config.py to test model on
+        test_datasets (list) : provide a list of dataset name configred in config.py to test model on
         base_model_save_path_template (str): A template string for loading pre-trained models
                                                       Example: "trained_models/catboost_best_{dataset_key}.pth"
 
@@ -95,18 +95,20 @@ def run_CatBoost_pipeline(
         pandas.DataFrame: A DataFrame summarizing the evaluation results across all processed datasets.
     """
 
-    # For looping through all datasets in the source
-    datasets_to_run = DATASETS.get(source_dataset, {})
-    overall_results_summary = {}
+    datasets_to_run = {}
     
-    if test_single_dataset:
-        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_dataset, None)
-        if datasets_to_run:
-            datasets_to_run = {test_single_dataset: datasets_to_run}
-        else:
-            print("Could not find a default dataset for testing. Please check DATASETS structure.")
-            datasets_to_run = {}
-
+    # override all datasets if a test list is given
+    if test_datasets:
+        for dataset_key in test_datasets:
+            dataset_value = DATASETS.get(source_dataset, {}).get(dataset_key, None)
+            if dataset_value:
+                datasets_to_run[dataset_key] = dataset_value
+            else:
+                print("Could not find a default dataset for testing. Please check DATASETS structure.")
+                datasets_to_run = {}
+    else:
+        # For looping through all datasets in the source
+        datasets_to_run = DATASETS.get(source_dataset, {})
     overall_results_summary = {} # To store aggregated results for each dataset
     
     for dataset_key, dataset_info_dict in datasets_to_run.items():

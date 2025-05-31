@@ -25,7 +25,12 @@ def calculate_regression_metrics(y_true, y_pred):
     mae = mean_absolute_error(y_true, y_pred)
     mse = mean_squared_error(y_true, y_pred)
     rmse = float(np.sqrt(mse))
-    mape = mean_absolute_percentage_error(y_true, y_pred) * 100
+    
+    mask = np.abs(y_true) > 1e-6 
+    if np.any(mask):
+        mape = mean_absolute_percentage_error(y_true[mask], y_pred[mask]) * 100
+    else:
+        mape = np.nan
 
     return {
         'MAE': mae,

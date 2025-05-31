@@ -76,7 +76,8 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         
         if model == "TabPFN":
             X_train, y_train, X_test, y_test = reduce_dataset_size(x_train_full_np, y_train_full_np, x_test_np, y_test_np, max_samples=10000, random_state=RANDOM_STATE)
-
+            return X_train, y_train, X_test, y_test
+        
         if model != "TabResFlow":
             X_train, y_train, X_test, y_test = x_train_full_np, y_train_full_np, x_test_np, y_test_np
             # for other models than TabResFlow

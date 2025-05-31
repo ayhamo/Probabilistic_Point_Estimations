@@ -347,7 +347,7 @@ class TabResFlow(nn.Module):
 
 def run_TabResFlow_pipeline(
     source_dataset :str = "uci",
-    test_single_dataset: str = None,
+    test_datasets = None,
     base_model_save_path_template : str = None # "trained_models/tabresflow_best_{dataset_key}.pth"
     ):
     """
@@ -355,7 +355,7 @@ def run_TabResFlow_pipeline(
 
     Args:
         source_dataset_type (str): The source of the datasets (e.g., "uci").
-        test_single_dataset (str) : provide single dataset name configred in config.py to test model on
+        test_datasets (list) : provide a list of dataset name configred in config.py to test model on
         base_model_save_path_template (str): A template string for loading pre-trained models
                                                       Example: "trained_models/tabresflow_best_{dataset_key}.pth"
 
@@ -363,18 +363,22 @@ def run_TabResFlow_pipeline(
         pandas.DataFrame: A DataFrame summarizing the evaluation results across all processed datasets.
     """
 
-    # For looping through all datasets in the source
-    datasets_to_run = DATASETS.get(source_dataset, {})
-    overall_results_summary = {}
+    datasets_to_run = {}
     
-    if test_single_dataset:
-        datasets_to_run = DATASETS.get(source_dataset, {}).get(test_single_dataset, None)
-        if datasets_to_run:
-            datasets_to_run = {test_single_dataset: datasets_to_run}
-        else:
-            print("Could not find a default dataset for testing. Please check DATASETS structure.")
-            datasets_to_run = {}
+    # override all datasets if a test list is given
+    if test_datasets:
+        for dataset_key in test_datasets:
+            dataset_value = DATASETS.get(source_dataset, {}).get(dataset_key, None)
+            if dataset_value:
+                datasets_to_run[dataset_key] = dataset_value
+            else:
+                print("Could not find a default dataset for testing. Please check DATASETS structure.")
+                datasets_to_run = {}
+    else:
+        # For looping through all datasets in the source
+        datasets_to_run = DATASETS.get(source_dataset, {})
 
+    overall_results_summary = {} # To store aggregated results for each dataset
 
     for dataset_key, dataset_info_dict in datasets_to_run.items():
         dataset_name = dataset_info_dict.get('name', dataset_key)
@@ -543,8 +547,9 @@ def run_tabresflow_optuna(
     all_best_hyperparams = {}
 
     for dataset_key in datasets_to_optimize:
-        logger.info(f"===== Starting Optuna HPO for TabResFlow on dataset: {dataset_key}, Fold: {hpo_fold_idx} =====")
+        logger.info(f"===== Starting Optuna HPO for TabResFlow on dataset: {dataset_key}, Fold: {hpo_fold_idx+1} =====")
 
+        # this is loaded at first for global training
         train_loader_hpo_base, val_loader_hpo_base, _, target_scaler_hpo = \
             load_preprocessed_data("TabResFlow", source_dataset, dataset_key, hpo_fold_idx,
                                    batch_size=default_batch_size_for_hpo_data_loading,
@@ -594,6 +599,7 @@ def run_tabresflow_optuna(
             train_loader_trial = train_loader_hpo_base
             val_loader_trial = val_loader_hpo_base
 
+            # if we change the batch size, then reload the data, else we use the global one!
             if current_train_hps['batch_size'] != default_batch_size_for_hpo_data_loading:
                 logger.debug(f"Recreating DataLoaders for batch_size {current_train_hps['batch_size']}")
                 train_loader_trial, val_loader_trial, _, _ = \
