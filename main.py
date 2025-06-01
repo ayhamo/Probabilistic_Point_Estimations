@@ -1,8 +1,15 @@
 '''
 TODO:
 
-1. implement tabpfn, xgboost, catboost
-2. Implement TabResNet
+1. Copy TabResFlow openml results
+2. Copy TabPFN openml results and compare
+3. run xgboost on UCI with optuna , mentioned below
+4. re run openml datasets with new paramters
+
+5. see catboost?
+6. implement TabResNet
+7. ???
+8. Profit.
 
 '''
 
@@ -13,10 +20,10 @@ if __name__ == '__main__':
     optuna = False
     optuna_metrics_optimize = ["Mean NLL", "MAE", "MSE", "RMSE", "MAPE"]
 
-    train_TabResFlow = True
+    train_TabResFlow = False
     train_TabPFN = False
     train_XGBoost = False
-    train_CatBoost = False
+    train_CatBoost = True
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline, run_tabresflow_optuna
@@ -32,7 +39,7 @@ if __name__ == '__main__':
         else:
             TabResFlow_summary_df = run_TabResFlow_pipeline(
             source_dataset = dataset_sources[1],
-            test_datasets = ["361253", "361616", "361268"] ,#["361622", ], # can specify a list of dataset key to test, otherwise None
+            test_datasets = ["361253"] ,#["361622", ], # can specify a list of dataset key to test, otherwise None
             # base_model_save_path_template="trained_models/tabresflow_best_{dataset_key}_fold{fold_idx}.pth"
         )
 
@@ -53,14 +60,14 @@ if __name__ == '__main__':
             best_hyperparameters_all_datasets = run_xgboost_optuna(
             source_dataset=dataset_sources[0],
             datasets_to_optimize=["concrete", "power-plant","protein-tertiary-structure"], # also have to do from openml 361253,361236,361247 others are fine
-            n_trials_optuna=100, 
+            n_trials_optuna=2, 
             hpo_fold_idx=1, 
             metric_to_optimize= optuna_metrics_optimize[3]
         )
         else:           
             XGBoost_summary_df = run_XGBoost_pipeline(
-            source_dataset = dataset_sources[1],
-            test_single_dataset = None,
+            source_dataset = dataset_sources[0],
+            test_datasets = None,
             # base_model_save_path_template="trained_models/xgboost_best_{dataset_key}_fold{fold_idx}.pth"
             )
 
