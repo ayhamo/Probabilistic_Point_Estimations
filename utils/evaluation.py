@@ -173,7 +173,6 @@ def calculate_and_log_regression_metrics_on_test(
     dataset_key_for_logging: str = "UnknownDataset"
 ):
     
-
     logger.info(f"[{dataset_key_for_logging}] Calculating regression metrics on test set (ORIGINAL SCALE) using MODE of {num_mc_samples_for_pred} MC samples:")
     
     all_y_true_original = []
@@ -204,16 +203,6 @@ def calculate_and_log_regression_metrics_on_test(
                 x_num_b, x_cat_b, target_scaler, num_mc_samples=num_mc_samples_for_pred
             )
             if batch_samples_original.shape[0] == 0: continue
-
-            if np.isnan(batch_samples_original).any():
-                    batch_samples_original = np.nan_to_num(batch_samples_original, nan=np.nanmean(batch_samples_original))
-                    logger.warning("NaN values have been imputed with the mean to avoid issues.")
-
-            # Handle Inf values by replacing them with the max finite value in the array
-            if np.isinf(batch_samples_original).any():
-                max_finite_value = np.nanmax(batch_samples_original[np.isfinite(batch_samples_original)])
-                batch_samples_original = np.where(np.isinf(batch_samples_original), max_finite_value, batch_samples_original)
-                logger.warning("Inf values have been replaced with the maximum finite value in the dataset.")
 
             batch_modes_original = np.array([
                 get_peak_prediction(

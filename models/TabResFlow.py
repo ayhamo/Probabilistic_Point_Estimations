@@ -1,6 +1,6 @@
 from configs.logger_config import global_logger as logger
 
-from configs.config import DATASETS, RANDOM_STATE, DATASET_MODEL_CONFIGS, device
+from configs.config import DATASETS, DATASET_MODEL_CONFIGS, device
 from utils.data_loader import load_preprocessed_data
 import utils.evaluation as evaluation
 
@@ -255,6 +255,80 @@ class TabResFlow(nn.Module):
                 logger.error("Target scaler is None in predict_samples_original_scale. Cannot inverse transform.")
                 # Or raise error, or return scaled samples with a warning
                 return samples_scaled.permute(1,0,2).squeeze(-1).cpu().numpy() # (batch_size, num_mc_samples)
+
+            # Handle NaN values
+            if np.isnan(samples_scaled_np).any():
+                # Count NaN values for logging
+                nan_count = np.isnan(samples_scaled_np).sum()
+                logger.warning(f"Found {nan_count} NaN values in scaled samples before inverse transform. Imputing with mean.")
+                
+                # Replace NaN with mean of finite values
+                finite_mask = np.isfinite(samples_scaled_np)
+                if finite_mask.any():
+                    mean_finite = np.nanmean(samples_scaled_np[finite_mask])
+                    samples_scaled_np = np.where(np.isnan(samples_scaled_np), mean_finite, samples_scaled_np)
+                else:
+                    # If no finite values, use 0.5 (middle of MinMaxScaler range)
+                    samples_scaled_np = np.full_like(samples_scaled_np, 0.5)
+                    logger.warning("No finite values found, using 0.5 as default.")
+
+            # Handle Infinity values
+            if np.isinf(samples_scaled_np).any():
+                inf_count = np.isinf(samples_scaled_np).sum()
+                logger.warning(f"Found {inf_count} infinity values in scaled samples before inverse transform.")
+                
+                # Replace infinity with reasonable values
+                finite_mask = np.isfinite(samples_scaled_np)
+                if finite_mask.any():
+                    max_finite = np.max(samples_scaled_np[finite_mask])
+                    min_finite = np.min(samples_scaled_np[finite_mask])
+                    
+                    # Replace positive infinity with the max finite value (clamped to expected range)
+                    # Replace negative infinity with the min finite value (clamped to expected range)
+                    expected_min, expected_max = target_scaler.feature_range
+                    pos_inf_replacement = min(max_finite, expected_max)
+                    neg_inf_replacement = max(min_finite, expected_min)
+
+                    samples_scaled_np = np.where(
+                        samples_scaled_np == np.inf, 
+                        pos_inf_replacement, 
+                        samples_scaled_np
+                    )
+                    samples_scaled_np = np.where(
+                        samples_scaled_np == -np.inf, 
+                        neg_inf_replacement, 
+                        samples_scaled_np
+                    )
+                    
+                    logger.warning(f"Replaced +inf with {pos_inf_replacement}, -inf with {neg_inf_replacement}")
+                else:
+                    # Fallback: use 0.5 for all infinity values
+                    samples_scaled_np = np.where(np.isinf(samples_scaled_np), 0.5, samples_scaled_np)
+                    logger.warning("No finite reference values, replaced infinities with 0.5")
+
+                
+                # Check if values are within the expected range for this scaler
+                original_min, original_max = np.min(samples_scaled_np), np.max(samples_scaled_np)
+                
+                # Only clip if values are significantly outside the expected range (with small tolerance)
+                tolerance = 0.1
+                if original_min < (expected_min - tolerance) or original_max > (expected_max + tolerance):
+                    logger.warning(f"Samples outside expected range [{expected_min}, {expected_max}]: [{original_min:.6f}, {original_max:.6f}]")
+                    samples_scaled_np = np.clip(samples_scaled_np, expected_min, expected_max)
+                    logger.warning(f"Clipped to range [{expected_min}, {expected_max}]")
+                else:
+                    logger.info(f"Samples within expected range [{expected_min}, {expected_max}]: [{original_min:.6f}, {original_max:.6f}]")
+
+            # Final check before inverse transform
+            if np.isnan(samples_scaled_np).any() or np.isinf(samples_scaled_np).any():
+                logger.error("Still have NaN/Inf values after cleaning - this should not happen!")
+                logger.error(f"NaN count: {np.isnan(samples_scaled_np).sum()}")
+                logger.error(f"Inf count: {np.isinf(samples_scaled_np).sum()}")
+                logger.error(f"Sample stats: min={np.min(samples_scaled_np)}, max={np.max(samples_scaled_np)}, mean={np.mean(samples_scaled_np)}")
+                
+                # Emergency fallback: replace any remaining invalid values
+                samples_scaled_np = np.nan_to_num(samples_scaled_np, nan=0.5, posinf=0.999, neginf=0.001)
+
 
             samples_original_np_flat = target_scaler.inverse_transform(samples_scaled_np)
             
