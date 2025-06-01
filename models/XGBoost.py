@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 def initialize_train_xgboost_regressor(X_train, y_train, **kwargs):
-    logger.info(f"Initializing and training XGBoost Regressor with params: {kwargs}...")
+    logger.info(f"Initializing and training XGBoost Regressor...")
     
     kwargs['random_state'] = RANDOM_STATE
         
@@ -21,36 +21,34 @@ def initialize_train_xgboost_regressor(X_train, y_train, **kwargs):
 def xgboost_nll(xgboost_regressor_model, X_test, y_test):
     """
     Calculates the model-based Negative Log-Likelihood (NLL) for a fitted XGBoost Regressor,
-    assuming a Gaussian distribution for the target variable with variance estimated
-    from the test set residuals.
-    Returns a dictionary with 'Mean NLL' and 'Total NLL'.
+    assuming a Gaussian distribution for the target variable with variance estimated from 
+    the test set residuals. Returns avg_nll.
     """
-    results_nll = {'Mean NLL': 0, 'Total NLL': 0}
-
     y_test_values = y_test.values if isinstance(y_test, pd.Series) else np.asarray(y_test)
-    
     y_pred = xgboost_regressor_model.predict(X_test)
-
     y_pred = np.asarray(y_pred)
-
+    
     residuals = y_test_values - y_pred
-    variance = np.var(residuals) 
-
-    if variance <= 1e-9:
+    variance = np.var(residuals)
+    
+    if variance <= 1e-6: # https://docs.pytorch.org/docs/stable/generated/torch.nn.GaussianNLLLoss.html
         logger.info("Estimated variance is close to zero in xgboost_nll. NLL might be unstable or Inf.")
-        variance = 1e-9
-
+        variance = max(variance, 1e-6)
+    
     log_2pi = np.log(2 * np.pi)
     nll_per_sample = 0.5 * (log_2pi + np.log(variance) + (residuals**2) / variance)
-    
     nll_per_sample_finite = nll_per_sample[np.isfinite(nll_per_sample)]
-
-
-    results_nll['Mean NLL'] = np.mean(nll_per_sample_finite)
-    results_nll['Total NLL'] = np.sum(nll_per_sample_finite)
-
-        
-    return results_nll
+    
+    avg_nll = np.mean(nll_per_sample_finite)
+    
+    INF_NLL_PLACEHOLDER = 1e20
+    # Check for NaN, Inf in avg_nll and replace if necessary
+    if np.isnan(avg_nll):
+        avg_nll = np.nan
+    elif np.isinf(avg_nll):
+        avg_nll = INF_NLL_PLACEHOLDER if avg_nll > 0 else -INF_NLL_PLACEHOLDER
+    
+    return avg_nll
 
 def evaluate_xgboost_model(model, X_test, y_test, y_pred):
     """
@@ -71,12 +69,11 @@ def evaluate_xgboost_model(model, X_test, y_test, y_pred):
     regression_metrics = evaluation.calculate_regression_metrics(y_test, y_pred)
     logger.info(f"Test Regression Metrics: {regression_metrics}")
 
-    nll_metrics = xgboost_nll(model, X_test, y_test)
+    avg_nll = xgboost_nll(model, X_test, y_test)
 
-    logger.info(f"xgboost_regressor Model Test Mean NLL: {nll_metrics['Mean NLL']:.4f}")
-    logger.info(f"xgboost_regressor Model Test Total NLL: {nll_metrics['Total NLL']:.4f}\n")
+    logger.info(f"xgboost_regressor Model Test Mean NLL: {avg_nll:.4f}")
         
-    return nll_metrics, regression_metrics
+    return avg_nll, regression_metrics
 
 def run_XGBoost_pipeline(
     source_dataset: str = "openml_ctr23",
@@ -125,17 +122,17 @@ def run_XGBoost_pipeline(
         elif source_dataset == "openml_ctr23":
             num_folds_to_run = 10
 
-        # taken from OpenML-CTR23 paper
-        xgboost_params_for_dataset = {
-            'device' : 'cuda',
-            'learning_rate': 0.1,            # Higher side from [1e-4, 1]
-            'n_estimators': 3000,            # Higher side from [1, 5000]
-            'max_depth': 15,                 # Higher side from [1, 20]
-            'subsample': 0.7,                # Higher side from [0.1, 1]
-            'colsample_bytree': 0.7,         # Higher side from [0.1, 1]
-            'colsample_bylevel': 0.7,        # Higher side from [0.1, 1]
-            'reg_alpha': 0.1,                # L1 reg, higher side from [0.001, 1000]
-            'reg_lambda': 1.0,               # L2 reg, higher side from [0.001, 1000] (XGBoost default is 1)
+        # avg of hyperparamters from Optuna run: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=242955599
+        xgboost_params = {
+            'device': 'cuda',
+            'learning_rate': 0.03,
+            'n_estimators': 2700,
+            'max_depth': 10,
+            'subsample': 0.85,
+            'colsample_bytree': 0.85,
+            'colsample_bylevel': 0.75,
+            'reg_alpha': 0.18,
+            'reg_lambda': 0.02,
         }
 
         logger.info(f"===== Starting XGBoost {num_folds_to_run}-Fold Evaluation for: {dataset_name} ({dataset_key}) =====")
@@ -150,18 +147,21 @@ def run_XGBoost_pipeline(
                         batch_size=0, # batch_size is not used, so 0
                         openml_pre_prcoess=False)
 
-            logger.info(f"Starting XGBoost training for {dataset_name}, Fold {fold_idx+1}...")
-            model_xgb = initialize_train_xgboost_regressor(X_train, y_train, **xgboost_params_for_dataset)
+            logger.info(f"Starting XGBoost training for {dataset_name}, Fold {fold_idx}...")
+            model_xgb = initialize_train_xgboost_regressor(X_train, y_train, **xgboost_params)
             logger.info("XGBoost Regressor training finished.")
 
-            logger.info(f"Evaluating XGBoost on test set for {dataset_name}, Fold {fold_idx+1}...")
+            logger.info(f"Evaluating XGBoost on test set for {dataset_name}, Fold {fold_idx}...")
+           
+           # to fix bug of diffrenet devices
+            model_xgb.set_params(device="cpu")
             y_pred = model_xgb.predict(X_test)
             
-            nll_metrics, reg_metrics = evaluate_xgboost_model(
+            avg_nll, reg_metrics = evaluate_xgboost_model(
                 model_xgb, X_test, y_test, y_pred,
             )
 
-            dataset_fold_metrics['nll'].append(nll_metrics.get('Mean NLL', np.nan))
+            dataset_fold_metrics['nll'].append(avg_nll)
             dataset_fold_metrics['mae'].append(reg_metrics.get('MAE', np.nan))
             dataset_fold_metrics['mse'].append(reg_metrics.get('MSE', np.nan))
             dataset_fold_metrics['rmse'].append(reg_metrics.get('RMSE', np.nan))
@@ -171,8 +171,12 @@ def run_XGBoost_pipeline(
         # AGGREGATED RESULTS for the current dataset
         logger.info(f"===== AGGREGATED XGBoost RESULTS for {dataset_name} ({dataset_key}) over {num_folds_to_run} Folds =====")
         
-        mean_nll = np.nanmean(dataset_fold_metrics['nll'])
-        std_nll = np.nanstd(dataset_fold_metrics['nll'])
+        # Filter out broken NLL folds (inf values)
+        valid_nll_values = [nll for nll in dataset_fold_metrics['nll'] if nll < 1e20]
+        broken_folds_count = len(dataset_fold_metrics['nll']) - len(valid_nll_values)
+
+        mean_nll = np.nanmean(valid_nll_values) if valid_nll_values else np.nan
+        std_nll = np.nanstd(valid_nll_values) if valid_nll_values else np.nan
         mean_mse = np.nanmean(dataset_fold_metrics['mse'])
         std_mse = np.nanstd(dataset_fold_metrics['mse'])
         mean_rmse = np.nanmean(dataset_fold_metrics['rmse'])
@@ -181,8 +185,11 @@ def run_XGBoost_pipeline(
         std_mae = np.nanstd(dataset_fold_metrics['mae'])
         mean_mape = np.nanmean(dataset_fold_metrics['mape'])
         std_mape = np.nanstd(dataset_fold_metrics['mape'])
+
+        # Append '*' if there were broken folds
+        broken_folds_indicator = f" *({broken_folds_count} broken folds)" if broken_folds_count > 0 else ""
         
-        logger.info(f"  Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}")
+        logger.info(f"  Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}{broken_folds_indicator}")
         logger.info(f"  Average Test MSE: {mean_mse:.4f} ± {std_mse:.4f}")
         logger.info(f"  Average Test RMSE: {mean_rmse:.4f} ± {std_rmse:.4f}")
         logger.info(f"  Average Test MAE: {mean_mae:.4f} ± {std_mae:.4f}")
@@ -219,7 +226,7 @@ def run_xgboost_optuna(
     datasets_to_optimize: list,
     n_trials_optuna: int = 100,
     hpo_fold_idx: int = 0,
-    metric_to_optimize: str = "Mean NLL" # Can be "Mean NLL" or "RMSE"
+    metric_to_optimize: str = "RMSE" # Can be "Mean NLL" or "RMSE"
 ):
     """
     Runs Optuna hyperparameter optimization for XGBoost on specified datasets.
