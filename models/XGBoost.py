@@ -145,7 +145,7 @@ def run_XGBoost_pipeline(
             X_train, y_train, X_test, y_test = \
                 load_preprocessed_data("XGBoost", source_dataset, dataset_key, fold_idx,
                         batch_size=0, # batch_size is not used, so 0
-                        openml_pre_prcoess=False)
+                        openml_pre_prcoess=True)
 
             logger.info(f"Starting XGBoost training for {dataset_name}, Fold {fold_idx}...")
             model_xgb = initialize_train_xgboost_regressor(X_train, y_train, **xgboost_params)
