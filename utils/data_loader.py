@@ -69,21 +69,25 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         y_test_raw_df = load_uci_data_segment(fp_data, fp_index_target, fp_index_test_rows)
         
         # Convert to NumPy arrays
-        x_train_full_np = x_train_full_raw_df.to_numpy()
-        y_train_full_np = y_train_full_raw_df.to_numpy().ravel()
-        x_test_np = x_test_raw_df.to_numpy()
-        y_test_np = y_test_raw_df.to_numpy().ravel()
+        X_train = x_train_full_raw_df.to_numpy()
+        y_train = y_train_full_raw_df.to_numpy().ravel()
+        X_test = x_test_raw_df.to_numpy()
+        y_test = y_test_raw_df.to_numpy().ravel()
         
         if model == "TabPFN":
-            X_train, y_train, X_test, y_test = reduce_dataset_size(x_train_full_np, y_train_full_np, x_test_np, y_test_np, max_samples=10000, random_state=RANDOM_STATE)
-            return X_train, y_train, X_test, y_test
+            X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, random_state=RANDOM_STATE)
         
         if model != "TabResFlow":
-            X_train, y_train, X_test, y_test = x_train_full_np, y_train_full_np, x_test_np, y_test_np
             # for other models than TabResFlow
             return X_train, y_train, X_test, y_test
         
         else:
+
+            x_train_full_np = X_train
+            y_train_full_np = y_train
+            x_test_np = X_test
+            y_test_np = y_test
+
             # Only for TabResFlow, it needs a loader + target scaling
             # Only for TabResFlow way:
             logger.info(f"pre-processing {dataset_identifier} with feature/taget scaling of [-1,1].")

@@ -8,7 +8,7 @@ For My datasets:
 
 # TabResFlow
 
-training metric was NLL
+Training metric was NLL
 
 Optuna optmization was done at: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=242874206
 for both Wine and yacht, and generlized hyperparamters were picked then for all others

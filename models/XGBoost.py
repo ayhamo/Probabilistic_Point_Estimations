@@ -60,8 +60,6 @@ def evaluate_xgboost_model(model, X_test, y_test, y_pred):
         X_test: Test features.
         y_test: Test target.
         y_pred: Predictions from the model.
-        fold_idx: Current fold index (for logging).
-        model_key: Identifier for the model (for logging).
 
     Returns:
         A tuple of (nll_metrics, regression_metrics) dictionaries.
@@ -140,7 +138,7 @@ def run_XGBoost_pipeline(
         dataset_fold_metrics = {'nll': [], 'mae': [], 'mse': [], 'rmse': [], 'mape': []}
 
         for fold_idx in range(num_folds_to_run):
-            logger.info(f"--- Processing Fold {fold_idx}/{num_folds_to_run} for dataset: {dataset_key} ---")
+            logger.info(f"--- Processing Fold {fold_idx+1}/{num_folds_to_run} for dataset: {dataset_key} ---")
             
             X_train, y_train, X_test, y_test = \
                 load_preprocessed_data("XGBoost", source_dataset, dataset_key, fold_idx,

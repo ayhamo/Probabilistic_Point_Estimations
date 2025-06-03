@@ -5,8 +5,8 @@ TODO:
 2. Copy TabPFN openml results and compare
 3. run xgboost on UCI with optuna , mentioned below
 4. re run openml datasets with new paramters
+5. see catboost
 
-5. see catboost?
 6. implement TabResNet
 7. ???
 8. Profit.
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     optuna_metrics_optimize = ["Mean NLL", "MAE", "MSE", "RMSE", "MAPE"]
 
     train_TabResFlow = False
-    train_TabPFN = False
+    train_TabPFN = True
     train_XGBoost = False
     train_CatBoost = True
 
@@ -48,7 +48,7 @@ if __name__ == '__main__':
         # TabPFN does HPO automtaiclly
         TabPFN_summary_df = run_TabPFN_pipeline(
         source_dataset = dataset_sources[1], 
-        test_datasets = None,
+        test_datasets = ["361272"],
         models_train_types = ["tabpfn_regressor"] ,#  "autotabpfn_regressor"],
         # base_model_save_path_template="trained_models/tabpfn_best_{dataset_key}_fold{fold_idx}.pth"
     )
@@ -59,8 +59,8 @@ if __name__ == '__main__':
         if optuna:
             best_hyperparameters_all_datasets = run_xgboost_optuna(
             source_dataset=dataset_sources[0],
-            datasets_to_optimize=["concrete", "power-plant","protein-tertiary-structure"], # also have to do from openml 361253,361236,361247 others are fine
-            n_trials_optuna=2, 
+            datasets_to_optimize=["concrete", "power-plant","protein-tertiary-structure"],
+            n_trials_optuna=100, 
             hpo_fold_idx=1, 
             metric_to_optimize= optuna_metrics_optimize[3]
         )
@@ -75,8 +75,8 @@ if __name__ == '__main__':
         from models.CatBoost import run_CatBoost_pipeline
 
         XGBoost_summary_df = run_CatBoost_pipeline(
-        source_dataset = dataset_sources[0],
-        test_single_dataset = None,
+        source_dataset = dataset_sources[1],
+        test_datasets = None,
         # base_model_save_path_template="trained_models/xgboost_best_{dataset_key}_fold{fold_idx}.pth"
         )
 

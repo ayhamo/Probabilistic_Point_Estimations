@@ -1,5 +1,5 @@
 from configs.logger_config import global_logger as logger
-from configs.config import DATASETS, RANDOM_STATE, device
+from configs.config import DATASETS
 from utils.data_loader import load_preprocessed_data
 import utils.evaluation as evaluation
 
@@ -7,12 +7,12 @@ from catboost import CatBoostRegressor
 import numpy as np
 import pandas as pd
 
-def initialize_train_catboost_regressor(X_train, y_train, **kwargs):
-    logger.info(f"Initializing and training CatBoost Regressor with params: {kwargs}...")
+def initialize_train_catboost_regressor(X_train, y_train, categorical_features_indices, **kwargs):
+    logger.info(f"Initializing and training CatBoost Regressor...")
     
     model = CatBoostRegressor(**kwargs)
 
-    model.fit(X_train, y_train, verbose=kwargs.get('verbose', 0))
+    model.fit(X_train, y_train, cat_features=categorical_features_indices, verbose=kwargs.get('verbose', 0))
 
     return model
 
@@ -23,34 +23,33 @@ def catboost_nll(catboost_regressor_model, X_test, y_test):
     from the test set residuals.
     Returns a dictionary with 'Mean NLL' and 'Total NLL'.
     """
-    results_nll = {'Mean NLL': 0, 'Total NLL': 0}
-
     y_test_values = y_test.values if isinstance(y_test, pd.Series) else np.asarray(y_test)
-    
     y_pred = catboost_regressor_model.predict(X_test)
-
     y_pred = np.asarray(y_pred)
-
+    
     residuals = y_test_values - y_pred
-    variance = np.var(residuals) 
-
-    if variance <= 1e-9:
-        logger.warning("Estimated variance is close to zero in CatBoost_nll. NLL might be unstable or Inf.")
-        variance = 1e-9
-
+    variance = np.var(residuals)
+    
+    if variance <= 1e-6: # https://docs.pytorch.org/docs/stable/generated/torch.nn.GaussianNLLLoss.html
+        logger.info("Estimated variance is close to zero in CatBoost_nll. NLL might be unstable or Inf.")
+        variance = max(variance, 1e-6)
+    
     log_2pi = np.log(2 * np.pi)
     nll_per_sample = 0.5 * (log_2pi + np.log(variance) + (residuals**2) / variance)
-    
     nll_per_sample_finite = nll_per_sample[np.isfinite(nll_per_sample)]
+    
+    avg_nll = np.mean(nll_per_sample_finite)
+    
+    INF_NLL_PLACEHOLDER = 1e20
+    # Check for NaN, Inf in avg_nll and replace if necessary
+    if np.isnan(avg_nll):
+        avg_nll = np.nan
+    elif np.isinf(avg_nll):
+        avg_nll = INF_NLL_PLACEHOLDER if avg_nll > 0 else -INF_NLL_PLACEHOLDER
+    
+    return avg_nll
 
-
-    results_nll['Mean NLL'] = np.mean(nll_per_sample_finite)
-    results_nll['Total NLL'] = np.sum(nll_per_sample_finite)
-
-        
-    return results_nll
-
-def evaluate_catboost_model(model, X_test, y_test, y_pred, fold_idx):
+def evaluate_catboost_model(model, X_test, y_test, y_pred):
     """
     Evaluates an CatBoost model, calculating regression metrics.
     NLL is currently returned as NaN.
@@ -60,21 +59,20 @@ def evaluate_catboost_model(model, X_test, y_test, y_pred, fold_idx):
         X_test: Test features.
         y_test: Test target.
         y_pred: Predictions from the model.
-        fold_idx: Current fold index (for logging).
-        model_key: Identifier for the model (for logging).
 
     Returns:
         A tuple of (nll_metrics, regression_metrics) dictionaries.
     """
+
+
     regression_metrics = evaluation.calculate_regression_metrics(y_test, y_pred)
-    logger.info(f"Fold {fold_idx+1} Test Regression Metrics: {regression_metrics}")
+    logger.info(f"Test Regression Metrics: {regression_metrics}")
 
-    nll_metrics = catboost_nll(model, X_test, y_test)
+    avg_nll = catboost_nll(model, X_test, y_test)
 
-    logger.info(f"Fold {fold_idx+1} CatBoost Model Test Mean NLL: {nll_metrics['Mean NLL']:.4f}")
-    logger.info(f"Fold {fold_idx+1} CatBoost Model Test Total NLL: {nll_metrics['Total NLL']:.4f}\n")
+    logger.info(f"CatBoost_regressor Model Test Mean NLL: {avg_nll:.4f}")
         
-    return nll_metrics, regression_metrics
+    return avg_nll, regression_metrics
 
 def run_CatBoost_pipeline(
     source_dataset: str = "openml_ctr23",
@@ -109,6 +107,7 @@ def run_CatBoost_pipeline(
     else:
         # For looping through all datasets in the source
         datasets_to_run = DATASETS.get(source_dataset, {})
+
     overall_results_summary = {} # To store aggregated results for each dataset
     
     for dataset_key, dataset_info_dict in datasets_to_run.items():
@@ -118,16 +117,23 @@ def run_CatBoost_pipeline(
             if dataset_key == "protein-tertiary-structure":
                 num_folds_to_run = 5
             else:
-                num_folds_to_run = 20 # 20
+                num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
-            num_folds_to_run = 1 # 10
+            num_folds_to_run = 10
 
-        # taken from OpenML-CTR23 paper
+        # the ranges are taken from catboost paper
+        # general paramters are taken from https://github.com/catboost/benchmarks/blob/master/quality_benchmarks/comparison_description.pdf
+        # as they say, out-of-the-box performance, so below are generally used, not optimized per dataset
         catboost_params_for_dataset = {
-            "learning_rate" : 1, 
-            "depth" : 6, 
+            "task_type" : "GPU",
             "loss_function" : 'RMSE',
-            'l2_leaf_reg': 5,
+            'learning_rate': 0.03,     # Log-uniform [e^07,1]
+            'depth': 6,
+            'fold_len_multiplier': 2,  # Discrete uniform [1,20]
+            'l2_leaf_reg': 3,          # Log-uniform [1,10]
+            'random_strength': 1,      # Discrete uniform [0,25]
+            'one_hot_max_size': 0,     # Discrete uniform [0,25]
+            'bagging_temperature': 1,  # Uniform [0,1]
         }
 
         logger.info(f"===== Starting CatBoost {num_folds_to_run}-Fold Evaluation for: {dataset_name} ({dataset_key}) =====")
@@ -140,20 +146,36 @@ def run_CatBoost_pipeline(
             X_train, y_train, X_test, y_test = \
                 load_preprocessed_data("CatBoost", source_dataset, dataset_key, fold_idx,
                         batch_size=0, # batch_size is not used, so 0
-                        openml_pre_prcoess=False)
+                        openml_pre_prcoess=False) # CatBoost specfically ask not to one hot encode
+            
+            # have to convert both X train and test to pd frame, and then convert all non real numbers to str
+            # otherwise catboost won't work and will crash, and it will give good result despite such pre-processing
+            # since only openML datasets need this, i put it underneath that condition
+            if source_dataset == "openml_ctr23":
+                X_train = pd.DataFrame(X_train)
+                categorical_features_indices = np.where(X_train.dtypes != float)[0]
+                X_train[categorical_features_indices] = X_train[categorical_features_indices].astype(str)    
+
+                X_test = pd.DataFrame(X_test)
+                categorical_features_indices = np.where(X_test.dtypes != float)[0]
+                X_test[categorical_features_indices] = X_test[categorical_features_indices].astype(str) 
+            else:
+                 # this is catboost default
+                 categorical_features_indices = None
 
             logger.info(f"Starting CatBoost training for {dataset_name}, Fold {fold_idx+1}...")
-            model_xgb = initialize_train_catboost_regressor(X_train, y_train, **catboost_params_for_dataset)
+            model_cb = initialize_train_catboost_regressor(X_train, y_train, categorical_features_indices, **catboost_params_for_dataset)
             logger.info("CatBoost Regressor training finished.")
 
             logger.info(f"Evaluating CatBoost on test set for {dataset_name}, Fold {fold_idx+1}...")
-            y_pred = model_xgb.predict(X_test)
             
-            nll_metrics, reg_metrics = evaluate_catboost_model(
-                model_xgb, X_test, y_test, y_pred, fold_idx,
+            y_pred = model_cb.predict(X_test)
+
+            avg_nll, reg_metrics = evaluate_catboost_model(
+                model_cb, X_test, y_test, y_pred,
             )
 
-            dataset_fold_metrics['nll'].append(nll_metrics.get('Mean NLL', np.nan))
+            dataset_fold_metrics['nll'].append(avg_nll)
             dataset_fold_metrics['mae'].append(reg_metrics.get('MAE', np.nan))
             dataset_fold_metrics['mse'].append(reg_metrics.get('MSE', np.nan))
             dataset_fold_metrics['rmse'].append(reg_metrics.get('RMSE', np.nan))
@@ -163,8 +185,12 @@ def run_CatBoost_pipeline(
         # AGGREGATED RESULTS for the current dataset
         logger.info(f"===== AGGREGATED CatBoost RESULTS for {dataset_name} ({dataset_key}) over {num_folds_to_run} Folds =====")
         
-        mean_nll = np.nanmean(dataset_fold_metrics['nll'])
-        std_nll = np.nanstd(dataset_fold_metrics['nll'])
+        # Filter out broken NLL folds (inf values)
+        valid_nll_values = [nll for nll in dataset_fold_metrics['nll'] if nll < 1e20]
+        broken_folds_count = len(dataset_fold_metrics['nll']) - len(valid_nll_values)
+
+        mean_nll = np.nanmean(valid_nll_values) if valid_nll_values else np.nan
+        std_nll = np.nanstd(valid_nll_values) if valid_nll_values else np.nan
         mean_mse = np.nanmean(dataset_fold_metrics['mse'])
         std_mse = np.nanstd(dataset_fold_metrics['mse'])
         mean_rmse = np.nanmean(dataset_fold_metrics['rmse'])
@@ -174,7 +200,10 @@ def run_CatBoost_pipeline(
         mean_mape = np.nanmean(dataset_fold_metrics['mape'])
         std_mape = np.nanstd(dataset_fold_metrics['mape'])
         
-        logger.info(f"  Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}")
+        # Append '*' if there were broken folds
+        broken_folds_indicator = f" *({broken_folds_count} broken folds)" if broken_folds_count > 0 else ""
+        
+        logger.info(f"  Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}{broken_folds_indicator}")
         logger.info(f"  Average Test MSE: {mean_mse:.4f} ± {std_mse:.4f}")
         logger.info(f"  Average Test RMSE: {mean_rmse:.4f} ± {std_rmse:.4f}")
         logger.info(f"  Average Test MAE: {mean_mae:.4f} ± {std_mae:.4f}")
