@@ -5,9 +5,14 @@ TODO:
 2. Copy TabPFN openml results and compare
 3. run xgboost on UCI with optuna , mentioned below
 4. re run openml datasets with new paramters
-5. see catboost
+5. update catboost, and get results both UCI and OpenML
 
 6. implement TabResNet
+
+X. Ask about Gaussian Process Regression and C.N.F?
+X. Implement VAE
+X. Implement Diffusion Models
+
 7. ???
 8. Profit.
 
