@@ -131,8 +131,7 @@ def run_TabResNet_pipeline(
     for dataset_key, dataset_info_dict in datasets_to_run.items():
         if dataset_key == "361268":
             # currently, this dataset crashes the program, due to illegal llegal memory access in cuda
-            #device = torch.device("cpu")
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = torch.device("cpu")
         else:
             # just reassign it to cuda or cpu again
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
