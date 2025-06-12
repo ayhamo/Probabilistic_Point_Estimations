@@ -26,9 +26,10 @@ if __name__ == '__main__':
     optuna_metrics_optimize = ["Mean NLL", "MAE", "MSE", "RMSE", "MAPE"]
 
     train_TabResFlow = False
-    train_TabPFN = True
+    train_TabPFN = False
     train_XGBoost = False
-    train_CatBoost = True
+    train_CatBoost = False
+    train_TabResNet = True
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline, run_tabresflow_optuna
@@ -79,10 +80,17 @@ if __name__ == '__main__':
     if train_CatBoost:
         from models.CatBoost import run_CatBoost_pipeline
 
-        XGBoost_summary_df = run_CatBoost_pipeline(
+        CatBoost_summary_df = run_CatBoost_pipeline(
         source_dataset = dataset_sources[1],
         test_datasets = None,
         # base_model_save_path_template="trained_models/xgboost_best_{dataset_key}_fold{fold_idx}.pth"
         )
 
-    #print(overall_summary_df)
+    if train_TabResNet:
+        from models.TabResNet import run_TabResNet_pipeline
+
+        TabResNet_summary_df = run_TabResNet_pipeline(
+        source_dataset = dataset_sources[1],
+        test_datasets = ["361268"],
+        # base_model_save_path_template="trained_models/TabResNet_best_{dataset_key}_fold{fold_idx}.pth"
+        )

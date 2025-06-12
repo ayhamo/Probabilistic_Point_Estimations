@@ -163,11 +163,11 @@ def run_CatBoost_pipeline(
                  # this is catboost default
                  categorical_features_indices = None
 
-            logger.info(f"Starting CatBoost training for {dataset_name}, Fold {fold_idx+1}...")
+            logger.info(f"Starting CatBoost training for {dataset_name}, Fold {fold_idx}...")
             model_cb = initialize_train_catboost_regressor(X_train, y_train, categorical_features_indices, **catboost_params_for_dataset)
             logger.info("CatBoost Regressor training finished.")
 
-            logger.info(f"Evaluating CatBoost on test set for {dataset_name}, Fold {fold_idx+1}...")
+            logger.info(f"Evaluating CatBoost on test set for {dataset_name}, Fold {fold_idx}...")
             
             y_pred = model_cb.predict(X_test)
 

@@ -198,14 +198,29 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         if openml_pre_prcoess:
 
             # Initialize preprocessor and fit ONLY on training data
-            preprocessor = make_openml_preprocessor(X_train_raw)
+            preprocessor = make_openml_preprocessor(X_train_raw, include_onehot=True)
             preprocessor.fit(X_train_raw)
 
             X_train = preprocessor.transform(X_train_raw)
             X_test = preprocessor.transform(X_test_raw)
         else:
-            X_train = X_train_raw.to_numpy()
-            X_test = X_test_raw.to_numpy()
+            # TabResNet requires a pd frame, so i just return it here without coverting to numpy
+            # and also it does not need one hot encoding, just imputer if needed, so 
+            if model == "TabResNet":
+                # we make the whole pre-processor pipeline without one-hot encoding, mainly imputing
+                preprocessor = make_openml_preprocessor(X_train_raw, include_onehot=False)
+                preprocessor.fit(X_train_raw)
+
+                X_train = preprocessor.transform(X_train_raw)
+                X_test = preprocessor.transform(X_test_raw)
+
+                return pd.DataFrame(X_train, columns=X_train_raw.columns), y_train, \
+                    pd.DataFrame(X_test, columns=X_test_raw.columns), y_test
+            
+            else:
+                # else for all models, just convert to numpy
+                X_train = X_train_raw.to_numpy()
+                X_test = X_test_raw.to_numpy()
 
         # If there are more than 10,000 samples, randomly sample 10,000 indices, 
         # that's becuase TabPFN does not work with more than that.
@@ -364,7 +379,7 @@ class HistogramImputer(BaseEstimator, TransformerMixin):
                 X_.loc[mask, col] = sampled
         return X_
     
-def make_openml_preprocessor(X_train_raw):
+def make_openml_preprocessor(X_train_raw, include_onehot):
     from sklearn.pipeline import Pipeline
     from sklearn.compose import ColumnTransformer
 
@@ -377,7 +392,7 @@ def make_openml_preprocessor(X_train_raw):
         ('cat', Pipeline([
             ('collapse', CollapseRareLevels(threshold=1000)),
             ('impute', SimpleImputer(strategy='constant', fill_value='MISSING')),
-            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+            *([('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))] if include_onehot else [])
         ]), categorical_cols),
         ('num', Pipeline([
             ('impute', HistogramImputer())
