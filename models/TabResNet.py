@@ -43,7 +43,8 @@ def initialize_train_tabresnet_regressor(model, X_train_tab_processed, y_train_t
         optimizer=optimizer,
         scheduler=scheduler,
         device=device,
-        num_workers=0
+        num_workers=0,
+        verbose=0 # i had to add this for kaggle training, since it spams the log output
     )
 
     trainer.fit(

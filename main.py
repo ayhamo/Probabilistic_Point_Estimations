@@ -91,6 +91,6 @@ if __name__ == '__main__':
 
         TabResNet_summary_df = run_TabResNet_pipeline(
         source_dataset = dataset_sources[1],
-        test_datasets = ["361268"],
+        test_datasets = None,
         # base_model_save_path_template="trained_models/TabResNet_best_{dataset_key}_fold{fold_idx}.pth"
         )

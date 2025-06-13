@@ -73,6 +73,10 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         y_train = y_train_full_raw_df.to_numpy().ravel()
         X_test = x_test_raw_df.to_numpy()
         y_test = y_test_raw_df.to_numpy().ravel()
+
+        # return the pandas dataframe for TabResNet for X, and y as numpy due to evulation
+        if model == "TabResNet":
+            return x_train_full_raw_df, y_train, x_test_raw_df, y_test
         
         if model == "TabPFN":
             X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, random_state=RANDOM_STATE)
