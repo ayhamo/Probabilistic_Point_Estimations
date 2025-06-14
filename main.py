@@ -1,16 +1,46 @@
 '''
 TODO:
 
-1. Copy TabResFlow openml results
-2. Copy TabPFN openml results and compare
-3. run xgboost on UCI with optuna , mentioned below
-4. re run openml datasets with new paramters
+1. TabResFlow openml results
+2. TabPFN updated openml results and compare
+3. TabPFN UCI protien update
+4. run xgboost on UCI with optuna
+4. re run xgboost openml and UCI datasets with new paramters
 5. update catboost, and get results both UCI and OpenML
-
 6. implement TabResNet
+7. get TabResNet results
 
-X. Ask about Gaussian Process Regression and C.N.F?
-X. Implement VAE
+8. Implement VAE
+TODO ASK!
+Tab-VAE (ICML 2023 and ICPRAM 2024): Although originally designed as an unconditional VAE for generating synthetic tabular data, Tab-VAE is 
+highly promising for extension into a conditional setting. Its architecture carefully tackles high-dimensional 
+categorical inputs—especially those arising from one-hot encodings—by incorporating specialized inference techniques.
+By simply concatenating the condition (e.g., class labels or other relevant attributes) to both the encoder and decoder
+inputs, you can transform Tab-VAE into a CVAE. This extension would allow it to generate data that respects the 
+underlying conditional distributions, which is particularly helpful for datasets with imbalanced classes or when 
+specific data subgroups need to be generated selectively.
+
+TTVAE (Transformer-based Tabular VAE) (EUSIPCO 2024): TTVAE leverages the attention mechanism of Transformer architectures to capture 
+complex interrelationships in tabular data. While its core formulation is unconditional, its rich latent representations 
+naturally lend themselves to conditioning. Integrating additional contextual tokens or concatenated condition vectors can 
+refine the generation process. This adaptation makes it possible to generate synthetic data that not only reflects the 
+inherent structure of the tabular domain but also adheres to external conditions—ideal for applications in finance or 
+healthcare where such control is paramount.
+
+VAE-GMM Integration Models: Another notable direction involves enhancing the VAE framework with components such as a 
+Bayesian Gaussian Mixture Model (GMM) to better capture multi-modal distributions inherent in tabular datasets. While 
+models like the one proposed in the improved tabular data generator with VAE-GMM integration do not start explicitly 
+as conditional models, their modular design means that adding conditioning is straightforward. By conditioning the 
+latent space clustering on additional attributes, one could refine the model's ability to generate feature-rich, 
+condition-specific synthetic data.
+
+9. get VAE results
+
+TODO ASK!
+C.N.F is same as NodeFlow, which TabResFlow (kiran paper) built upon, so do i really need to do them?
+the same case applies to spline flows, where kiran also used them in his model
+
+X. Ask about Gaussian Process Regression
 X. Implement Diffusion Models
 
 7. ???
@@ -29,7 +59,8 @@ if __name__ == '__main__':
     train_TabPFN = False
     train_XGBoost = False
     train_CatBoost = False
-    train_TabResNet = True
+    train_TabResNet = False
+    train_VAE = True
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline, run_tabresflow_optuna
@@ -93,4 +124,13 @@ if __name__ == '__main__':
         source_dataset = dataset_sources[1],
         test_datasets = None,
         # base_model_save_path_template="trained_models/TabResNet_best_{dataset_key}_fold{fold_idx}.pth"
+        )
+
+    if train_VAE:
+        from models.VAE import run_VAE_pipeline
+
+        TabResNet_summary_df = run_VAE_pipeline(
+        source_dataset = dataset_sources[1],
+        test_datasets = None,
+        # base_model_save_path_template="trained_models/VAE_best_{dataset_key}_fold{fold_idx}.pth"
         )

@@ -11,7 +11,7 @@ For My datasets:
 Training metric was NLL
 
 Optuna optmization was done at: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=242874206
-for both Wine and yacht, and generlized hyperparamters were picked then for all others
+for both Wine and yacht, and generlized hyperparameters were picked then for all others
 
 (due to limited resoruces and time it takes to train TabResFlow, this was the only solution)
 
@@ -74,9 +74,31 @@ The rest of datasets: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersi
 | cars (361622)                     | 9.3759 ± 0.4065 | 27622500  ± 21774774                 | 4745.3806 ± 2259.1731          | 3197.9751 ± 1534.9386          | 15.50% ± 8.33%              |
 | space_ga (361623)                 | -0.8686 ± 0.0672| 0.0127 ± 0.0035                              | 0.1118 ± 0.0141                | 0.0824 ± 0.0056                | 16.20% ± 1.48%              |
 
+# Variational Autoencoder (VAE)
+
+Training metric was ...
+
+## UCI
+
+Link: ...
+
+| Dataset                      | Test NLL             | Test MSE              | Test RMSE            | Test MAE             | Test MAPE            |
+|------------------------------|----------------------|-----------------------|----------------------|----------------------|----------------------|
+
+
+## OpenML-CTR23
+
+Link: ...
+
+| Dataset                               | Test NLL              | Test MSE                                | Test RMSE                 | Test MAE                  | Test MAPE              |
+|---------------------------------------|-----------------------|-----------------------------------------|---------------------------|---------------------------|------------------------|
+
+
 # TabPFN
 
 Training metric was RMSE
+
+TabPFN hyperparameters are optimized automatically during the training.
 
 ## UCI
 
@@ -99,7 +121,7 @@ Link: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=241417558
 
 below results are with pre-prcoessing to the dataset (most notebly one hot encoding)
 
-Link inital results (video transcoding,): https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=241417651
+Link inital results (video transcoding): https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=241417651
 
 Link Part 1 (Grid -> health_insurance): https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=242935617
 
@@ -156,7 +178,7 @@ Below datasets had some broken folds, in which NLL result was unstable, and as s
 Training metric was RMSE
 
 Optuna optmization was done at: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=242955599
-for Concrete, Power and Protein, and generlized hyperparamters were picked then for all others
+for Concrete, Power and Protein, and generlized hyperparameters were picked then for all others
 
 ## UCI
 
@@ -218,6 +240,11 @@ link: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=243073005
 # CatBoost
 
 Training metric was RMSE
+
+hyperparameters ranges were obtained from catboost paper,
+general paramters are taken from: https://github.com/catboost/benchmarks/blob/master/quality_benchmarks/comparison_description.pdf
+
+as they say, out-of-the-box performance, so below are generally used, not optimized per dataset
 
 ## UCI
 
@@ -281,10 +308,61 @@ Link: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=243501583
 
 Training metric was RMSE
 
+hyperparameters were taken from the library testing on bunch of datasets: https://jrzaurin.github.io/infinitoml/2021/05/28/pytorch-widedeep_iv.html
+
 ## UCI
 
-Link: ...
+Link: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=245279742
+
+| Dataset                      | Test NLL             | Test MSE              | Test RMSE            | Test MAE             | Test MAPE            |
+|------------------------------|----------------------|-----------------------|----------------------|----------------------|----------------------|
+| Concrete                     | 3.1696 ± 0.0763      | 33.4399 ± 5.1269      | 5.7658 ± 0.4423      | 4.2128 ± 0.2875      | 14.07% ± 1.34%       |
+| Energy                       | 3.6134 ± 1.3055      | 33.0509 ± 53.7260     | 4.7157 ± 3.2883      | 4.1615 ± 3.0067      | 20.56% ± 14.06%      |
+| Kin8nm                       | -0.8595 ± 0.1725     | 0.0098 ± 0.0026       | 0.0982 ± 0.0125      | 0.0800 ± 0.0114      | 12.73% ± 1.37%       |
+| Naval       | -2.5209 ± 0.6835     | 0.0002 ± 0.0002       | 0.0146 ± 0.0051      | 0.0122 ± 0.0046      | 1.24% ± 0.46%        |
+| Power                  | 4.3301 ± 1.5719      | 106.1714 ± 90.4414    | 9.5650 ± 3.8317      | 8.2903 ± 3.9516      | 1.82% ± 0.87%        |
+| Protein   | 3.4960 ± 0.3256      | 58.5130 ± 28.5243     | 7.4585 ± 1.6983      | 6.1844 ± 1.4931      | 215.60% ± 89.02%     |
+| Wine             | 1.0447 ± 0.0536      | 0.4706 ± 0.0462       | 0.6852 ± 0.0342      | 0.5309 ± 0.0243      | 9.40% ± 0.55%        |
+| Yacht                        | 2.5100 ± 0.4910      | 12.0495 ± 8.3310      | 3.2256 ± 1.2827      | 1.7955 ± 0.7296      | 53.99% ± 26.87%      |
 
 ## OpenML-CTR23
 
-Link: ...
+Link: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=245280269
+
+| Dataset                               | Test NLL              | Test MSE                                | Test RMSE                 | Test MAE                  | Test MAPE              |
+|---------------------------------------|-----------------------|-----------------------------------------|---------------------------|---------------------------|------------------------|
+| grid_stability (361251)               | -3.3527 ± 0.1207      | 0.0001 ± 0.0000                         | 0.0085 ± 0.0010           | 0.0067 ± 0.0010           | 109.22% ± 97.97%       |
+| video_transcoding (361252)            | 1.8625 ± 0.1307       | 2.5143 ± 0.7170                         | 1.5712 ± 0.2139           | 0.7278 ± 0.0839           | 14.99% ± 2.43%         |
+| wave_energy (361253)                  | 13.2414 ± 2.4484      | 630536198.4836 ± 367691990.0705         | 23975.3117 ± 7464.6250    | 21608.9752 ± 7747.6771    | 0.57% ± 0.21%          |
+| sarcos (361254)                       | 2.6505 ± 0.0916       | 11.7916 ± 2.0053                        | 3.4211 ± 0.2958           | 2.5162 ± 0.2529           | 44.16% ± 7.36%         |
+| california_housing (361255)           | 12.6498 ± 0.2177      | 5731829172.8496 ± 2219063887.9075       | 74382.9958 ± 14106.7043   | 54281.4934 ± 11386.9203   | 28.80% ± 5.90%         |
+| cpu_activity (361256)                 | 3.3018 ± 1.0781       | 39.2216 ± 58.7860                       | 5.2785 ± 3.3704           | 4.4482 ± 3.2813           | 5.46% ± 3.84%          |
+| diamonds (361257)                     | 7.9975 ± 0.0529       | 520249.2515 ± 56704.3436                | 720.2492 ± 38.6047        | 354.8036 ± 19.2909        | 9.13% ± 0.18%          |
+| kin8nm (361258)                       | -1.0459 ± 0.1522      | 0.0072 ± 0.0021                         | 0.0843 ± 0.0114           | 0.0674 ± 0.0103           | 11.48% ± 1.24%         |
+| pumadyn32nh (361259)                  | -2.1367 ± 0.1901      | 0.0009 ± 0.0003                         | 0.0291 ± 0.0053           | 0.0231 ± 0.0041           | 235.32% ± 46.85%       |
+| miami_housing (361260)                | 13.0223 ± 0.0775      | 12115593482.2717 ± 1902481405.5462      | 109740.0256 ± 8527.6178   | 58181.0137 ± 7738.8015   | 15.09% ± 2.80%         |
+| cps88wages (361261)                   | 7.4074 ± 0.0983       | 162233.0056 ± 33916.8092                | 400.7276 ± 40.6246        | 232.3680 ± 4.1957         | 51.09% ± 1.86%         |
+| socmob (361264)                       | 4.7709 ± 0.3154       | 983.5829 ± 600.8121                     | 29.9612 ± 9.2687          | 11.8413 ± 2.9483          | 99.51% ± 8.73%         |
+| kings_county (361266)                 | 13.5204 ± 0.1471      | 33959113254.2392 ± 10880851510.4136     | 182138.1590 ± 28014.3590  | 107033.7765 ± 4868.8705   | 20.15% ± 0.35%         |
+| brazilian_houses (361267)             | 10.2135 ± 0.7884      | 184088113.1992 ± 360229625.4841        | 9514.5037 ± 9672.7624     | 2191.9918 ± 385.5978      | 37.13% ± 3.27%         |
+| fps_benchmark (361268)                | 3.5078 ± 0.7474       | 50.2346 ± 43.5918                       | 6.4106 ± 3.0230           | 5.2784 ± 2.6356           | 4.13% ± 1.93%          |
+| health_insurance (361269)             | 4.3208 ± 0.0156       | 331.6207 ± 10.4357                      | 18.2082 ± 0.2850          | 12.7059 ± 0.3059          | 41.91% ± 1.30%         |
+| fifa (361272)                         | 10.8324 ± 0.0893      | 152383782.9666 ± 24970103.3691          | 12299.6116 ± 1050.3992   | 4830.2042 ± 222.0408      | 94.73% ± 5.14%         |
+| abalone (361234)                      | 2.5464 ± 0.1344       | 9.6863 ± 2.7162                         | 3.0871 ± 0.3949           | 2.2393 ± 0.2997           | 22.19% ± 2.34%         |
+| airfoil_self_noise (361235)           | 3.2631 ± 0.0975       | 40.4833 ± 8.2148                        | 6.3318 ± 0.6253           | 5.1157 ± 0.5526           | 4.11% ± 0.48%          |
+| auction_verification (361236)         | 8.1466 ± 0.0978       | 710135.0436 ± 140923.8559               | 838.6441 ± 82.5291        | 505.6831 ± 51.5283        | 41.00% ± 12.77%        |
+| concrete_compressive_strength (361237)| 3.1493 ± 0.0926       | 32.1677 ± 6.8079                        | 5.6442 ± 0.5576           | 4.2434 ± 0.3239           | 14.32% ± 1.21%         |
+| physiochemical_protein (361241)       | 3.3559 ± 0.2899       | 52.2450 ± 30.8531                       | 6.9638 ± 1.9365           | 5.4212 ± 1.6191           | 161.26% ± 93.90%       |
+| superconductivity (361242)            | 4.1125 ± 0.0784       | 221.0088 ± 35.7952                      | 14.8198 ± 1.1751          | 9.2058 ± 0.5307           | 825.12% ± 510.22%      |
+| geographical_origin_of_music (361243) | 4.2619 ± 0.1136       | 301.4084 ± 62.1681                      | 17.2594 ± 1.8767          | 12.3249 ± 1.2259          | 90.42% ± 23.67%        |
+| solar_flare (361244)                  | 1.3139 ± 0.1474       | 0.8453 ± 0.2414                         | 0.9099 ± 0.1320           | 0.4385 ± 0.0619           | 84.23% ± 10.62%        |
+| naval_propulsion_plant (361247)       | -2.7499 ± 0.6620      | 0.0002 ± 0.0001                         | 0.0129 ± 0.0051           | 0.0106 ± 0.0043           | 1.09% ± 0.43%          |
+| white_wine (361249)                   | 1.1139 ± 0.0425       | 0.5438 ± 0.0442                         | 0.7368 ± 0.0302           | 0.5720 ± 0.0178           | 9.89% ± 0.39%          |
+| red_wine (361250)                     | 1.0233 ± 0.0858       | 0.4552 ± 0.0694                         | 0.6726 ± 0.0529           | 0.5158 ± 0.0519           | 9.19% ± 0.89%          |
+| Moneyball (361616)                    | 5.8670 ± 0.0916       | 7313.9748 ± 1285.6976                   | 85.1957 ± 7.4612          | 66.6351 ± 7.0045          | 9.26% ± 0.94%          |
+| energy_efficiency (361617)            | 3.3493 ± 1.4883       | 13.6008 ± 9.9648                        | 3.4018 ± 1.4244           | 2.8877 ± 1.3656           | 14.98% ± 6.24%         |
+| forest_fires (361618)                 | 5.5098 ± 0.4610       | 5588.7016 ± 5658.2627                   | 66.7953 ± 33.5722         | 24.8320 ± 10.6065         | 647.29% ± 509.56%      |
+| student_performance_por (361619)      | 2.6156 ± 0.1127       | 11.0542 ± 2.3991                        | 3.3047 ± 0.3645           | 2.5507 ± 0.3290           | 20.99% ± 3.63%         |
+| QSAR_fish_toxicity (361621)           | 1.3620 ± 0.0850       | 0.9016 ± 0.1593                         | 0.9460 ± 0.0817           | 0.6768 ± 0.0347           | 23.42% ± 7.69%         |
+| cars (361622)                         | 12.1178 ± 1.8513      | 604268570.6450 ± 748883264.5074         | 20568.5844 ± 13461.1258   | 18323.8385 ± 13103.9223   | 101.36% ± 80.40%       |
+| space_ga (361623)                     | -0.5381 ± 0.1230      | 0.0207 ± 0.0065                         | 0.1423 ± 0.0199           | 0.1012 ± 0.0045           | 20.44% ± 2.01%         |
