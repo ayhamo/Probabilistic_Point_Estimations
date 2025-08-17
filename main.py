@@ -45,7 +45,7 @@ if __name__ == '__main__':
     train_XGBoost = False
     train_CatBoost = False
     train_TabResNet = False
-    train_VAE = False
+    train_VAE = True
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline, run_tabresflow_optuna
@@ -115,16 +115,7 @@ if __name__ == '__main__':
         from models.TTVAE import run_TTVAE_pipeline
 
         TabResNet_summary_df = run_TTVAE_pipeline(
-        source_dataset = dataset_sources[1],
+        source_dataset = dataset_sources[0],
         test_datasets = None,
-        # base_model_save_path_template="trained_models/VAE_best_{dataset_key}_fold{fold_idx}.pth"
-        )
-
-    if True:
-        from models.TTVAE import run_TTVAE_pipeline
-
-        TTVAE_summary_df = run_TTVAE_pipeline(
-        source_dataset = dataset_sources[1],
-        test_datasets = None,
-        epochs=1
+        epochs=60
         )

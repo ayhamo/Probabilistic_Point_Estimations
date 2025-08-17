@@ -90,11 +90,11 @@ def run_TTVAE_pipeline(
         
         if source_dataset == "uci":
             if dataset_key == "protein-tertiary-structure":
-                num_folds_to_run = 1#5
+                num_folds_to_run = 5
             else:
-                num_folds_to_run = 1#20
+                num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
-            num_folds_to_run = 1#10
+            num_folds_to_run = 10
 
         logger.info(f"===== Starting TTVAE {num_folds_to_run}-Fold Evaluation for: {dataset_name} ({dataset_key}) =====")
 
