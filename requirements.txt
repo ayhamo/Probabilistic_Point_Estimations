@@ -1,27 +1,41 @@
 # enter env: env/Scripts/activate
 
+# essential
 numpy
 pandas
 matplotlib
 ipykernel
+ipywidgets
 
+# datasets
 openml
 
+# training libraries
 scikit-learn
-torch torchvision --index-url https://download.pytorch.org/whl/cu126
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch
+#torchvision check if it's needed?
 
+
+# Hyperparamter optimization
+optuna
+
+# models libraries
 tabpfn
 git+https://github.com/priorlabs/tabpfn-extensions.git
 
 xgboost
 
+catboost
+
 # For TabResFlow
-zoku
+zuko
 hyperopt
 
 # For TabResNet
 pytorch_widedeep
 torchmetrics
 
-# Hyperparamter optimization
-optuna
+# For TTVAE
+rdt
+properscoring

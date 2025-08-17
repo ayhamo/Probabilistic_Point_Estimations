@@ -81,6 +81,12 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         if model == "TabPFN":
             X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, random_state=RANDOM_STATE)
         
+        # This model reuqires raw data, train and test only!
+        if model == "TTVAE":
+            train_df = pd.concat([x_train_full_raw_df, y_train_full_raw_df], axis=1)
+            test_df = pd.concat([x_test_raw_df, y_test_raw_df], axis=1)
+            return train_df, test_df
+        
         if model != "TabResFlow":
             # for other models than TabResFlow
             return X_train, y_train, X_test, y_test
@@ -230,6 +236,12 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         # that's becuase TabPFN does not work with more than that.
         if model == "TabPFN":
             X_train, y_train, X_test, y_test = reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, random_state=RANDOM_STATE)
+
+        # This model reuqires raw data, train and test only!
+        if model == "TTVAE":
+            train_df = pd.concat([pd.DataFrame(X_train), pd.DataFrame(y_train)], axis=1)
+            test_df = pd.concat([pd.DataFrame(X_test), pd.DataFrame(y_test)], axis=1)
+            return train_df, test_df
 
         if model != "TabResFlow":
             # for all models
@@ -384,9 +396,6 @@ class HistogramImputer(BaseEstimator, TransformerMixin):
         return X_
     
 def make_openml_preprocessor(X_train_raw, include_onehot):
-    from sklearn.pipeline import Pipeline
-    from sklearn.compose import ColumnTransformer
-
     # Identify categorical columns
     categorical_cols = X_train_raw.select_dtypes(['object', 'category']).columns.tolist()
     numerical_cols = [col for col in X_train_raw.columns if col not in categorical_cols]
