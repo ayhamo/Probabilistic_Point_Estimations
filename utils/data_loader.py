@@ -227,6 +227,7 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
                 return pd.DataFrame(X_train, columns=X_train_raw.columns), y_train, \
                     pd.DataFrame(X_test, columns=X_test_raw.columns), y_test
             
+            # not sure if this is being used?
             else:
                 # else for all models, just convert to numpy
                 X_train = X_train_raw.to_numpy()

@@ -115,7 +115,7 @@ if __name__ == '__main__':
         from models.TTVAE import run_TTVAE_pipeline
 
         TabResNet_summary_df = run_TTVAE_pipeline(
-        source_dataset = dataset_sources[0],
+        source_dataset = dataset_sources[1],
         test_datasets = None,
         epochs=60
         )

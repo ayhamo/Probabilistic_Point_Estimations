@@ -112,6 +112,10 @@ def run_TTVAE_pipeline(
             train_df.columns = [str(i) for i in range(train_df.shape[1])]
             test_df.columns = [str(i) for i in range(test_df.shape[1])]
 
+            # to prevent illegal casting during CRPS calculation!
+            train_df = train_df.astype('float64')
+            test_df  = test_df.astype('float64')
+
             logger.info(f"Starting TTVAE training for {dataset_name}, Fold {fold_idx}...")
 
             ckpt_path = f'trained_models/TTVAE/{dataset_name}/{fold_idx}'
