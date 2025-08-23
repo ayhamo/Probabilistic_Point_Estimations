@@ -118,7 +118,7 @@ def run_TTVAE_pipeline(
 
             logger.info(f"Starting TTVAE training for {dataset_name}, Fold {fold_idx}...")
 
-            ckpt_path = f'trained_models/TTVAE/{dataset_name}/{fold_idx}'
+            ckpt_path = f'trained_models/TTVAE/{dataset_name}/fold {fold_idx}'
             if not os.path.exists(ckpt_path):
                 os.makedirs(ckpt_path)
                                                             # Cat Columns
