@@ -51,6 +51,15 @@ def evaluate_VAE_model(model, test_df, ckpt_path):
         
     return average_crps, avg_nll
 
+"""
+TTVAE (Transformer-based Tabular VAE) (EUSIPCO 2024): TTVAE leverages the attention mechanism of Transformer architectures to capture 
+complex interrelationships in tabular data. While its core formulation is unconditional, its rich latent representations 
+naturally lend themselves to conditioning. Integrating additional contextual tokens or concatenated condition vectors can 
+refine the generation process. This adaptation makes it possible to generate synthetic data that not only reflects the 
+inherent structure of the tabular domain but also adheres to external conditions—ideal for applications in finance or 
+healthcare where such control is paramount.
+"""
+
 def run_TTVAE_pipeline(
     source_dataset: str = "openml_ctr23",
     test_datasets = None,

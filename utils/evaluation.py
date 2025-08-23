@@ -81,89 +81,77 @@ def evaluate_nll(
     avg_val_nll = total_val_nll / batches_processed
     return avg_val_nll
 
-# kept for now for other models , may remove later
-def evaluate_regression_test_samples(
-    model: nn.Module, # Expecting model with predict_mean_std method
-    test_loader: torch.utils.data.DataLoader,
-    target_scaler: MinMaxScaler,
-    num_mc_samples_for_pred: int = 1000):
+def calculate_crps(
+    model, 
+    data_loader: torch.utils.data.DataLoader, 
+    target_scaler, 
+    num_mc_samples: int = 1000,
+    device: str = 'cpu'
+):
     """
-    Evaluates the model on the test set for regression metrics (MAE, MSE, RMSE, MAPE)
-    and returns the average predicted standard deviation.
+    Calculates the average Continuous Ranked Probability Score (CRPS) for a model on a given dataset.
+
+    Args:
+        model: The trained probabilistic model. Must have a `predict_samples_original_scale` method.
+        data_loader: DataLoader for the test set.
+        target_scaler: The scaler used to transform the target variable (e.g., MinMaxScaler).
+                       Needed to inverse-transform the true values.
+        num_mc_samples (int): The number of samples to draw from the predictive distribution for each data point.
+                              Should be an even number for the split-sample approximation.
+        device (str): The device to run the model on.
 
     Returns:
-        A tuple: (regression_metrics_dict, average_predicted_std_dev)
-                 Returns (None, None) if evaluation cannot be performed.
+        float: The average CRPS over the entire dataset.
     """
-    logger.info(f"Calculating regression metrics on test set using {num_mc_samples_for_pred} Monte Carlo samples for predictions:")
-    all_y_true_test = []
-    all_y_pred_test_mean = []
-    all_y_pred_test_std = []
-    
+    model.to(device)
     model.eval()
+    all_crps_scores = []
+
+    # Ensure we have an even number of samples for the split-sample approximation of E[|Y-Y'|]
+    if num_mc_samples % 2 != 0:
+        num_mc_samples += 1
+        print(f"Adjusted num_mc_samples to {num_mc_samples} for CRPS calculation.")
+
     with torch.no_grad():
-        for batch_idx, (x_num_b_from_loader, y_b_loader_scaled) in enumerate(test_loader):
-            if y_b_loader_scaled.numel() == 0: 
-                logger.debug(f"Skipping empty target batch {batch_idx} in test regression evaluation.")
-                continue
+        for x_num_b, y_b_true_scaled in data_loader:
+            # Prepare batch data
+            x_num_b = x_num_b.to(device)
+            x_cat_b = torch.empty((x_num_b.shape[0], 0), dtype=torch.long, device=device) # Assuming no categorical features as per your loop
             
-            x_num_b = x_num_b_from_loader.to(device) if x_num_b_from_loader.numel() > 0 else x_num_b_from_loader
-
-            # Create an empty x_cat_b tensor
-            x_cat_b = torch.empty((x_num_b.shape[0], 0), dtype=torch.long, device=device)
-            
-            try: 
-
-                y_pred_b_mean_scaled, y_pred_b_std_scaled = model.predict_mean_std(
-                    x_num_b, x_cat_b, num_mc_samples=num_mc_samples_for_pred
-                )     
-                
-                if y_b_loader_scaled.numel() == 0: # If predict_mean_std returns empty for an empty input
-                    logger.debug(f"Skipping batch {batch_idx} due to empty predictions.")
-                    continue
-                
-                # Inverse transform predictions and true values for metrics on original scale
-                y_true_batch_scaled_np = y_b_loader_scaled.cpu().numpy().reshape(-1, 1)
-                y_pred_batch_mean_scaled_np = y_pred_b_mean_scaled.cpu().numpy().reshape(-1, 1)
-                y_pred_batch_std_scaled_np = y_pred_b_std_scaled.cpu().numpy().reshape(-1, 1)
-
-                y_true_batch_original_np = target_scaler.inverse_transform(y_true_batch_scaled_np)
-                y_pred_batch_mean_original_np = target_scaler.inverse_transform(y_pred_batch_mean_scaled_np)
-                y_pred_batch_std_original_np = target_scaler.inverse_transform(y_pred_batch_std_scaled_np)
-
-                all_y_true_test.extend(y_true_batch_original_np.squeeze())
-                all_y_pred_test_mean.extend(y_pred_batch_mean_original_np.squeeze())
-                all_y_pred_test_std.extend(y_pred_batch_std_original_np.squeeze())
-
-            except Exception as e:
-                logger.error(f"Error during prediction for regression metrics (Batch {batch_idx}): {e}", exc_info=True)
+            # Handle empty batches
+            if x_num_b.shape[0] == 0:
                 continue
-        
-    try:
-        regression_metrics = calculate_regression_metrics(all_y_true_test, all_y_pred_test_mean)
-    except ValueError as e:
-        logger.error(f"Error calculating regression metrics: {e}")
-        # Optional: Handle NaNs before retrying
-        if np.isnan(all_y_true_test).any() or np.isnan(all_y_pred_test_mean).any():
-            logger.warning("NaN values detected in input data!")
-            # for example drop?
-            mask = ~np.isnan(all_y_true_test) & ~np.isnan(all_y_pred_test_mean)  # Keep only non-NaN elements
-            y_true_filtered = all_y_true_test[mask]
-            y_pred_filtered = all_y_pred_test_mean[mask]
-            try:
-                regression_metrics = calculate_regression_metrics(y_true_filtered, y_pred_filtered)
-            except ValueError as e:
-                print(f"Error even after NaN handling: {e}")
-                regression_metrics = None  # Fallback option
-        
-    avg_pred_std = None
-    if all_y_pred_test_std:
-        y_std_np = np.array(all_y_pred_test_std)
-        if y_std_np.size > 0: # Ensure not empty before mean
-             avg_pred_std = float(np.mean(y_std_np))
 
-    return regression_metrics, avg_pred_std
-    
+            # 1. Generate predictive samples on the ORIGINAL data scale
+            # Shape: (batch_size, num_mc_samples)
+            samples_original = model.predict_samples_original_scale(
+                x_num=x_num_b,
+                x_cat=x_cat_b,
+                target_scaler=target_scaler,
+                num_mc_samples=num_mc_samples
+            )
+
+            # 2. Get true target values on the ORIGINAL data scale
+            # Shape: (batch_size, 1) -> (batch_size,)
+            y_b_true_original = target_scaler.inverse_transform(y_b_true_scaled.cpu().numpy()).squeeze(-1)
+
+            # 3. Calculate CRPS for each item in the batch using the energy score formula
+            # Ensure y_b_true_original can be broadcasted against samples_original
+            # y_b_true_original[:, None] gives it shape (batch_size, 1)
+            
+            # Term 1: E[|Y - y|]
+            term1 = np.mean(np.abs(samples_original - y_b_true_original[:, None]), axis=1)
+
+            # Term 2: 0.5 * E[|Y - Y'|]
+            # We approximate this by splitting our samples into two halves (Y and Y')
+            s1 = samples_original[:, :num_mc_samples // 2]
+            s2 = samples_original[:, num_mc_samples // 2:]
+            term2 = 0.5 * np.mean(np.abs(s1 - s2), axis=1)
+
+            batch_crps = term1 - term2
+            all_crps_scores.extend(batch_crps.tolist())
+
+    return np.mean(all_crps_scores)
     
 def calculate_and_log_regression_metrics_on_test(
     model: nn.Module, 

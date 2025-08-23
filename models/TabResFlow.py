@@ -472,6 +472,7 @@ def run_TabResFlow_pipeline(
  
 
         all_folds_test_nll = []
+        all_folds_test_crps = []
         all_folds_test_mae = []
         all_folds_test_mse = []
         all_folds_test_rmse = []
@@ -537,21 +538,30 @@ def run_TabResFlow_pipeline(
             all_folds_test_nll.append(test_nll)
             logger.info(f"Fold {fold_idx+1} Test NLL: {test_nll:.4f}")
 
+            test_crps = evaluation.calculate_crps(
+                model=test_model, data_loader=test_loader, target_scaler=target_scaler, num_mc_samples= 100, device=device
+            )
+            all_folds_test_crps.append(test_crps)
+            logger.info(f"Fold {fold_idx+1} Test CRPS: {test_crps:.4f}")
+
             regression_metrics_test = evaluation.calculate_and_log_regression_metrics_on_test(
                 model=test_model, test_loader=test_loader,
-                target_scaler=target_scaler, num_mc_samples_for_pred=1000,
+                # mc samples is normally 1000, but as running only for CRPS results, it was reduced to 50 for faster results
+                target_scaler=target_scaler, num_mc_samples_for_pred=50,
                 dataset_key_for_logging=f"{dataset_key}_Fold {fold_idx+1}",
             )
             all_folds_test_mae.append(regression_metrics_test.get('MAE', np.nan))
             all_folds_test_mse.append(regression_metrics_test.get('MSE', np.nan))
             all_folds_test_rmse.append(regression_metrics_test.get('RMSE', np.nan))
             all_folds_test_mape.append(regression_metrics_test.get('MAPE', np.nan))
-            logger.info(f"Fold {fold_idx+1} Test Regression Metrics using 100 MC samples: {regression_metrics_test}\n")
+            logger.info(f"Fold {fold_idx+1} Test Regression Metrics using 1000(50 for CRPS run) MC samples: {regression_metrics_test}\n")
 
 
         # Results for the current dataset
         mean_nll = np.nanmean(all_folds_test_nll) if all_folds_test_nll else np.nan
         std_nll = np.nanstd(all_folds_test_nll) if all_folds_test_nll else np.nan
+        mean_crps = np.nanmean(all_folds_test_crps) if all_folds_test_crps else np.nan
+        std_crps = np.nanstd(all_folds_test_crps) if all_folds_test_crps else np.nan
         mean_mse = np.nanmean(all_folds_test_mse) if all_folds_test_mse else np.nan
         std_mse = np.nanstd(all_folds_test_mse) if all_folds_test_mse else np.nan
         mean_rmse = np.nanmean(all_folds_test_rmse) if all_folds_test_rmse else np.nan
@@ -563,6 +573,7 @@ def run_TabResFlow_pipeline(
 
         logger.info(f"===== AGGREGATED RESULTS for {dataset_name} ({dataset_key}) over {num_folds_to_run} Folds =====")
         logger.info(f"Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}")
+        logger.info(f"Average Test CRPS: {mean_crps:.4f} ± {std_crps:.4f}")
         logger.info(f"Average Test MSE: {mean_mse:.4f} ± {std_mse:.4f}")
         logger.info(f"Average Test RMSE: {mean_rmse:.4f} ± {std_rmse:.4f}")
         logger.info(f"Average Test MAE: {mean_mae:.4f} ± {std_mae:.4f}")
@@ -573,6 +584,7 @@ def run_TabResFlow_pipeline(
             'display_name': dataset_name,
             'num_folds': num_folds_to_run,
             'NLL_mean': mean_nll, 'NLL_std': std_nll,
+            'CRPS_mean': mean_crps, 'CRPS_std': std_crps,
             'MSE_mean': mean_mse, 'MSE_std': std_mse,
             'RMSE_mean': mean_rmse, 'RMSE_std': std_rmse,
             'MAE_mean': mean_mae, 'MAE_std': std_mae,
@@ -584,6 +596,7 @@ def run_TabResFlow_pipeline(
     for ds_key, results in overall_results_summary.items():
         logger.info(f"--- Dataset: {results['display_name']} ({ds_key}) ({results['num_folds']} Folds) ---")
         logger.info(f"  Average Test NLL: {results['NLL_mean']:.4f} ± {results['NLL_std']:.4f}")
+        logger.info(f"  Average Test CRPS: {results['CRPS_mean']:.4f} ± {results['CRPS_std']:.4f}")
         logger.info(f"  Average Test MSE: {results['MSE_mean']:.4f} ± {results['MSE_std']:.4f}")
         logger.info(f"  Average Test RMSE: {results['RMSE_mean']:.4f} ± {results['RMSE_std']:.4f}")
         logger.info(f"  Average Test MAE: {results['MAE_mean']:.4f} ± {results['MAE_std']:.4f}")

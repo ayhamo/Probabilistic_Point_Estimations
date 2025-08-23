@@ -9,23 +9,14 @@ TODO:
 5. update catboost, and get results both UCI and OpenML
 6. implement TabResNet
 7. get TabResNet results
-
 8. Implement VAE
-TODO info!
-Tab-VAE (ICML 2023 and ICPRAM 2024): missing tons of important code for logic, impossible to replicate
-
-TTVAE (Transformer-based Tabular VAE) (EUSIPCO 2024): TTVAE leverages the attention mechanism of Transformer architectures to capture 
-complex interrelationships in tabular data. While its core formulation is unconditional, its rich latent representations 
-naturally lend themselves to conditioning. Integrating additional contextual tokens or concatenated condition vectors can 
-refine the generation process. This adaptation makes it possible to generate synthetic data that not only reflects the 
-inherent structure of the tabular domain but also adheres to external conditions—ideal for applications in finance or 
-healthcare where such control is paramount.
-
-DO NOT FORGET TO DO CRPS FOR TABRESFLOW AND OTHER HERE
+=> DO NOT FORGET TO DO CRPS FOR TABRESFLOW AND OTHER HERE
 9. get VAE results
+10. get TabResFlow CRPS!
+
+11. Gaussian Process Regression
 
 
-X. Ask about Gaussian Process Regression ( as in from sklearn? or search for sota? i found alot of them)
 X. Implement Diffusion Models
 
 7. ???
@@ -40,12 +31,12 @@ if __name__ == '__main__':
     optuna = False
     optuna_metrics_optimize = ["Mean NLL", "MAE", "MSE", "RMSE", "MAPE"]
 
-    train_TabResFlow = False
+    train_TabResFlow = True
     train_TabPFN = False
     train_XGBoost = False
     train_CatBoost = False
     train_TabResNet = False
-    train_VAE = True
+    train_VAE = False
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline, run_tabresflow_optuna
@@ -61,7 +52,7 @@ if __name__ == '__main__':
         else:
             TabResFlow_summary_df = run_TabResFlow_pipeline(
             source_dataset = dataset_sources[1],
-            test_datasets = ["361253"] ,#["361622", ], # can specify a list of dataset key to test, otherwise None
+            test_datasets = None ,#["361622", ], # can specify a list of dataset key to test, otherwise None
             # base_model_save_path_template="trained_models/tabresflow_best_{dataset_key}_fold{fold_idx}.pth"
         )
 
