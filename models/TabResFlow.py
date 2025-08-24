@@ -547,7 +547,7 @@ def run_TabResFlow_pipeline(
             regression_metrics_test = evaluation.calculate_and_log_regression_metrics_on_test(
                 model=test_model, test_loader=test_loader,
                 # mc samples is normally 1000, but as running only for CRPS results, it was reduced to 50 for faster results
-                target_scaler=target_scaler, num_mc_samples_for_pred=50,
+                target_scaler=target_scaler, num_mc_samples_for_pred=1000,
                 dataset_key_for_logging=f"{dataset_key}_Fold {fold_idx+1}",
             )
             all_folds_test_mae.append(regression_metrics_test.get('MAE', np.nan))

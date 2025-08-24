@@ -10,11 +10,10 @@ TODO:
 6. implement TabResNet
 7. get TabResNet results
 8. Implement VAE
-=> DO NOT FORGET TO DO CRPS FOR TABRESFLOW AND OTHER HERE
 9. get VAE results
 10. get TabResFlow CRPS!
 
-11. Gaussian Process Regression
+11. Gaussian Process Regression => No SOTA, just normal model!
 
 
 X. Implement Diffusion Models
@@ -31,7 +30,7 @@ if __name__ == '__main__':
     optuna = False
     optuna_metrics_optimize = ["Mean NLL", "MAE", "MSE", "RMSE", "MAPE"]
 
-    train_TabResFlow = True
+    train_TabResFlow = False
     train_TabPFN = False
     train_XGBoost = False
     train_CatBoost = False
