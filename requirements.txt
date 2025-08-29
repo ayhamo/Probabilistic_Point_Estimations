@@ -39,3 +39,12 @@ torchmetrics
 # For TTVAE
 rdt
 properscoring
+
+# TDGPS
+# pip install --no-deps uq360
+# python setup.py develop
+# for the sake of god, DO NOT CHANGE ANY VERSION HERE
+tensorflow==2.16.2
+tensorflow-probability==0.24.0
+gpflow==2.10.0
+gpflux

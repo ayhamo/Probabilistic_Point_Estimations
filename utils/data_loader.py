@@ -88,7 +88,7 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
             return train_df, test_df
         
         if model != "TabResFlow":
-            # for other models than TabResFlow
+            # for other models than TabResFlow (TDGPs)
             return X_train, y_train, X_test, y_test
         
         else:

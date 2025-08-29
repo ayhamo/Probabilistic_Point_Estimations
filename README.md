@@ -19,8 +19,8 @@ __Important Note:__
 
     1. MC samples that were generated are 1000, not 100 as in the Log!
 
-    2. CRPS calculation was done at later stage, and MC samples were reduced to 50 for faster calculations, so please ignore
-    the results of MSE,RMSE,MAE and MAPE for the CRPS run!
+    2. CRPS calculation was done at later stage, and MC samples were reduced to 50 for faster 
+    calculations, so please ignore the results of MSE,RMSE,MAE and MAPE for the CRPS run!
 
 ## UCI
 

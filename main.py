@@ -13,8 +13,9 @@ TODO:
 9. get VAE results
 10. get TabResFlow CRPS!
 
-11. Gaussian Process Regression => No SOTA, just normal model!
-
+11. Gaussian Process Regression => https://arxiv.org/abs/2310.11527 Thin and Deep Gaussian Processes (NeurIPS 2023)
+must do "pip install --no-deps uq360" !!
+in models/tdgplib => python setup.py develop
 
 X. Implement Diffusion Models
 
@@ -36,6 +37,7 @@ if __name__ == '__main__':
     train_CatBoost = False
     train_TabResNet = False
     train_VAE = False
+    train_GPs = True
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline, run_tabresflow_optuna
@@ -108,4 +110,12 @@ if __name__ == '__main__':
         source_dataset = dataset_sources[1],
         test_datasets = None,
         epochs=60
+        )
+
+    if train_GPs:
+        from models.TDGPs import run_TDGP_pipeline
+
+        TDGPs_summary_df = run_TDGP_pipeline(
+        source_dataset = dataset_sources[0],
+        test_datasets = None,
         )
