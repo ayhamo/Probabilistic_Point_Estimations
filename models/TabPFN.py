@@ -9,7 +9,8 @@ import pandas as pd
 
 import torch
 from tabpfn import TabPFNRegressor
-from tabpfn_extensions.post_hoc_ensembles.sklearn_interface import AutoTabPFNRegressor
+# Removed due not being needed, but code is kept
+#from tabpfn_extensions.post_hoc_ensembles.sklearn_interface import AutoTabPFNRegressor
 
 def initialize_train_tabpfn_regressor(X_train, y_train, **kwargs):
     """
@@ -29,10 +30,10 @@ def initialize_train_autotabpfn_regressor(X_train, y_train, **kwargs):
     """
 
     logger.info(f"Initializing and training AutoTabPFNRegressor (device={device})...")
-    auto_regressor = AutoTabPFNRegressor(device=device, **kwargs)
-    auto_regressor.fit(X_train, y_train)
+    #auto_regressor = AutoTabPFNRegressor(device=device, **kwargs)
+    #auto_regressor.fit(X_train, y_train)
 
-    return auto_regressor
+    return None #auto_regressor
 
 def tabpfn_nll(tabpfn_regressor_model, X_test, y_test):
     """

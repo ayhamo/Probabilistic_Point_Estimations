@@ -22,7 +22,7 @@ optuna
 
 # models libraries
 tabpfn
-git+https://github.com/priorlabs/tabpfn-extensions.git
+#git+https://github.com/priorlabs/tabpfn-extensions.git
 
 xgboost
 
@@ -41,10 +41,13 @@ rdt
 properscoring
 
 # TDGPS
+# to install, must be in this order
 # pip install --no-deps uq360
 # python setup.py develop
-# for the sake of god, DO NOT CHANGE ANY VERSION HERE
-#tensorflow==2.16.2 # for gpu access, we need tensorflow[and-cuda]==2.16.2
+# pip install -r requirements.txt
+# pip install tensorflow[and-cuda]==2.16.2 or pip install #tensorflow==2.16.2
+# tensorflow should be manully installed only when TDGPS will be used
+# downgrading it causes alot of conflicts
 tensorflow-probability==0.24.0
 gpflow==2.10.0
 gpflux

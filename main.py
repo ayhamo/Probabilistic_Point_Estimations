@@ -14,10 +14,7 @@ TODO:
 10. get TabResFlow CRPS!
 
 11. Gaussian Process Regression => https://arxiv.org/abs/2310.11527 Thin and Deep Gaussian Processes (NeurIPS 2023)
-must do: 
-    1. pip install --no-deps uq360
-    2. pip install tensorflow[and-cuda]==2.16.2
-    3. in models/thindeepgps => python setup.py develop 
+installation explained in requirements.txt and must be followed in order, otherwise it won't work!
 
 X. Implement Diffusion Models
 
