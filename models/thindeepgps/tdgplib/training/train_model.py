@@ -16,8 +16,8 @@ TF_LOGGER = logging.getLogger("tensorflow")
 _default_schedule = (
     # (iterations , variance, step size)
     (500, 0.01, 0.1),
-    (1_500, 0.01, 0.01),
-    (5_000, True, 0.001)
+    (1_000, 0.01, 0.01),
+    #(5_000, True, 0.001)
 )
 
 
