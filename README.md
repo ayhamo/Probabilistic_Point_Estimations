@@ -153,6 +153,31 @@ From Kings_country to end: https://www.kaggle.com/code/ayhamo/thesis-main?script
 | cars (361622) | -243489.0560 ± 4720.8492 | 7887.3716 ± 1166.7600 |
 | space_ga (361623) | -285105.4730 ± 11125.3637 | 0.0309 ± 0.0079 |
 
+# Thin and Deep Gaussian Processes (TDGPs)
+
+Installation is explained in requirements.txt and must be followed in order, otherwise it won't work!
+
+- They are commented because they use old versions of libraries and they would conflict with all other libraries, which is why they must be installed only when TDGPs will be used
+
+- after usage the environment must be re-initialized to use the latest version for other models!
+
+Why NLL is computed on the scaled target
+- becuase then we also then have to transform the variance correctly, and any mismatch could distort the NLL, so I kept it.
+
+Why regression metrics are computed on the unscaled target
+- Metrics like RMSE, MAE, R² are easier to interpret in the original units of the target variable.
+
+
+## UCI
+
+| Dataset | Test NLL | Test MSE | Test RMSE | Test MAE | Test MAPE |
+|---------|---------|---------|---------|---------|---------|
+
+## OpenML-CTR23
+
+| Dataset | Test NLL | Test MSE | Test RMSE | Test MAE | Test MAPE |
+|---------|---------|---------|---------|---------|---------|
+
 # TabPFN
 
 Training metric was RMSE

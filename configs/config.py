@@ -48,7 +48,7 @@ DATASETS = {
     # OpenML-CTR23 datasets https://www.openml.org/search?type=study&study_type=undefined&sort=tasks_included&id=353
     "openml_ctr23": {
         "361251": {"name": "grid_stability"},
-        "361252": {"name": "video_transcoding"},
+        #"361252": {"name": "video_transcoding"},
         "361253": {"name": "wave_energy"},
         "361254": {"name": "sarcos"},
         "361255": {"name": "california_housing"},

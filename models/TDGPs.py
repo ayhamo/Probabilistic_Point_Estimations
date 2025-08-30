@@ -71,7 +71,7 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
     Returns:
         A tuple of (avg_nll, regression_metrics, y_pred_unscaled).
     """
-    logger.info("Evaluating TDGP model on the test set...")
+    logger.info("--- Evaluating TDGP model on the test set ---")
     
     # Make Predictions (in scaled space)
     likelihood_variance = tdgplib.helper.get_likelihood_variance(model)
@@ -85,7 +85,9 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
     y_pred_mean_scaled = f_pred_mean
     y_pred_var_scaled = f_pred_var + likelihood_variance
     
-    # --- Calculate NLL (in scaled space) ---
+    # Calculate NLL (in scaled space)
+    # If we try to unscaled NLL, we also have then to transform the variance correctly 
+    # and any mismatch could distort the NLL, so i kept it
     try:
         nll_metrics = uq360.metrics.regression_metrics.compute_regression_metrics(
             y_test,
@@ -101,7 +103,8 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
         
     logger.info(f"TDGP Model Test Mean NLL (scaled): {avg_nll:.4f}")
 
-    # --- Calculate Regression Metrics (in original data space) ---
+    # Calculate Regression Metrics (in original data space)
+    # but we have to unscale here becuase then the results would not make sense!
     # Inverse transform predictions and ground truth to original scale
     y_pred_unscaled = y_scaler.inverse_transform(y_pred_mean_scaled.numpy())
     y_test_unscaled = y_scaler.inverse_transform(y_test)
@@ -138,11 +141,11 @@ def run_TDGP_pipeline(
 
         if source_dataset == "uci":
             if dataset_key == "protein-tertiary-structure":
-                num_folds_to_run = 1#5
+                num_folds_to_run = 5
             else:
-                num_folds_to_run = 1#20
+                num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
-            num_folds_to_run = 1#10
+            num_folds_to_run = 10
 
         # TDGP model parameters
         tdgp_params = {
@@ -226,108 +229,3 @@ def run_TDGP_pipeline(
     logger.info("===== ***** END OF OVERALL SUMMARY ***** =====")
 
     return results_df
-
-def run_xgboost_optuna(
-    source_dataset: str,
-    datasets_to_optimize: list,
-    n_trials_optuna: int = 100,
-    hpo_fold_idx: int = 0,
-    metric_to_optimize: str = "RMSE" # Can be "Mean NLL" or "RMSE"
-):
-    """
-    Runs Optuna hyperparameter optimization for XGBoost on specified datasets.
-
-    Args:
-        source_dataset (str): The source of the datasets (e.g., "openml_ctr23").
-        datasets_to_optimize (list): A list of dataset keys (strings) to perform HPO on.
-        n_trials_optuna (int): Number of Optuna trials to run for each dataset.
-        hpo_fold_idx (int): The index of the fold to use for hyperparameter optimization.
-                            Training will be on this fold's train set, validation on its test set.
-        metric_to_optimize (str): The metric to optimize ("Mean NLL" or "RMSE").
-
-    Returns:
-        dict: A dictionary where keys are dataset_keys and values are dictionaries
-              containing 'best_params' and 'best_value' from Optuna.
-    """
-    import optuna
-
-    all_best_hyperparams = {}
-    
-    # Determine device once
-    xgb_device = 'cuda' if device.type == 'cuda' else 'cpu'
-
-    for dataset_key in datasets_to_optimize:
-        dataset_info = DATASETS.get(source_dataset, {}).get(dataset_key, None)
-        if not dataset_info:
-            logger.warning(f"Dataset key '{dataset_key}' not found in source '{source_dataset}'. Skipping.")
-            continue
-        
-        dataset_name = dataset_info.get('name', dataset_key)
-        logger.info(f"===== Starting Optuna HPO for XGBoost on: {dataset_name} fold {hpo_fold_idx} ({dataset_key}) =====")
-        logger.info(f"Optimizing for: {metric_to_optimize} over {n_trials_optuna} trials.")
-
-        # Load data for HPO (using the specified fold)
-        X_train, y_train, X_test, y_test = \
-            load_preprocessed_data("XGBoost", source_dataset, dataset_key, hpo_fold_idx,
-                                   batch_size=0, openml_pre_prcoess=True) # Corrected typo
-
-        def objective(trial):
-            # Define the search space for hyperparameters
-            # These ranges are examples; adjust them based on your expectations/prior knowledge
-            params = {
-                'device': xgb_device,
-                'random_state': RANDOM_STATE, # Consistent random state for XGBoost itself
-                'verbosity': 0, # Suppress XGBoost's own messages during HPO                
-                'learning_rate': trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
-                'n_estimators': trial.suggest_int('n_estimators', 500, 4000, step=100),
-                'max_depth': trial.suggest_int('max_depth', 3, 15), # Original had 15, reduced upper for faster HPO
-                'subsample': trial.suggest_float('subsample', 0.5, 1.0),
-                'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
-                'colsample_bylevel': trial.suggest_float('colsample_bylevel', 0.5, 1.0),
-                'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 10.0, log=True), # L1
-                'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 10.0, log=True), # L2
-            }
-            
-            # Train model
-            model_xgb = initialize_train_xgboost_regressor(X_train, y_train, **params)
-
-            # Predict and evaluate
-            y_pred = model_xgb.predict(X_test)
-            reg_metrics = evaluate_xgboost_model(model_xgb, X_test, y_test, y_pred)
-
-            merged_metrics = {**reg_metrics[0], **reg_metrics[1]}
-            return merged_metrics[metric_to_optimize] if metric_to_optimize in merged_metrics else float('inf') 
-        
-        # Create an Optuna study
-        study = optuna.create_study(direction='minimize') 
-
-        optuna_original_verbosity = optuna.logging.get_verbosity()
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-        study.optimize(objective, n_trials=n_trials_optuna)
-
-        optuna.logging.set_verbosity(optuna_original_verbosity)
-
-        logger.info(f"\nOptuna HPO finished for {dataset_name} ({dataset_key}).")
-        logger.info(f"  Best trial number: {study.best_trial.number}")
-        logger.info(f"  Best {metric_to_optimize}: {study.best_value:.4f}")
-        logger.info(f"  Best hyperparameters: {study.best_params}")
-        
-        # Store results, ensuring 'device' is included as it's fixed, not tuned
-        best_params_with_device = study.best_params.copy()
-
-        all_best_hyperparams[dataset_key] = {
-            'best_params': best_params_with_device,
-            'best_value': study.best_value
-        }
-        logger.info("===================================================================\n")
-
-    logger.info("===== ***** SUMMARY OF OPTUNA HPO RESULTS ***** =====")
-    for ds_key, result in all_best_hyperparams.items():
-        dataset_name = DATASETS.get(source_dataset, {}).get(ds_key, {}).get('name', ds_key)
-        logger.info(f"--- Dataset: {dataset_name} ({ds_key}) ---")
-        logger.info(f"  Best {metric_to_optimize}: {result['best_value']:.4f}")
-        logger.info(f"  Best Hyperparameters: {result['best_params']}\n")
-    logger.info("===== ***** END OF OPTUNA HPO SUMMARY ***** =====")
-    
-    return all_best_hyperparams
