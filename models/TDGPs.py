@@ -145,7 +145,7 @@ def run_TDGP_pipeline(
             else:
                 num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
-            num_folds_to_run = 10
+            num_folds_to_run = 5#10
 
         # TDGP model parameters
         tdgp_params = {
