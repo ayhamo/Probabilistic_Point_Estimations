@@ -169,17 +169,18 @@ def run_TDGP_pipeline(
                         batch_size=0,
                         openml_pre_prcoess=True)
             
-            # Set a maximum size for training
-            current_train_size, num_features = X_train.shape
-            data_load_budget = 300000
-            dynamic_max_samples = int(data_load_budget / num_features)
+            if source_dataset == "openml_ctr23":
+                # Set a maximum size for training, since the scaling is bad
+                current_train_size, num_features = X_train.shape
+                data_load_budget = 300000
+                dynamic_max_samples = int(data_load_budget / num_features)
 
-            if current_train_size > dynamic_max_samples:
-                print(f"Original training sample size: {current_train_size}. Sampling down to {dynamic_max_samples}.")
-                shuffled_indices = np.random.permutation(current_train_size)
-                selected_indices = shuffled_indices[:dynamic_max_samples]
-                X_train = X_train[selected_indices]
-                y_train = y_train[selected_indices]
+                if current_train_size > dynamic_max_samples:
+                    print(f"Original training sample size: {current_train_size}. Sampling down to {dynamic_max_samples}.")
+                    shuffled_indices = np.random.permutation(current_train_size)
+                    selected_indices = shuffled_indices[:dynamic_max_samples]
+                    X_train = X_train[selected_indices]
+                    y_train = y_train[selected_indices]
             
             x_scaler = StandardScaler()
             y_scaler = StandardScaler()
