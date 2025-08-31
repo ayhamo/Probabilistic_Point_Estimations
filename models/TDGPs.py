@@ -1,5 +1,5 @@
 from configs.logger_config import global_logger as logger
-from configs.config import DATASETS, RANDOM_STATE, device
+from configs.config import DATASETS, RANDOM_STATE
 from utils.data_loader import load_preprocessed_data
 import utils.evaluation as evaluation
 
@@ -149,8 +149,8 @@ def run_TDGP_pipeline(
 
         # TDGP model parameters
         tdgp_params = {
-            'num_inducing_v': 25,  # Inducing points for the "thin" layer
-            'num_inducing_u': 50,  # Inducing points for the output GP layer
+            'num_inducing_v': 13,#25,  # Inducing points for the "thin" layer
+            'num_inducing_u': 25,#50,  # Inducing points for the output GP layer
             'num_latent_q': None   # Latent dimensions, will default to input dim
         }
 
@@ -162,12 +162,24 @@ def run_TDGP_pipeline(
             logger.info(f"--- Processing Fold {fold_idx+1}/{num_folds_to_run} for dataset: {dataset_key} ---")
             
             helper.set_all_random_seeds(RANDOM_STATE)
-            
+
             # Load data
             X_train, y_train, X_test, y_test = \
                 load_preprocessed_data("TDGP", source_dataset, dataset_key, fold_idx,
                         batch_size=0,
                         openml_pre_prcoess=True)
+            
+            # Set a maximum size for training
+            current_train_size, num_features = X_train.shape
+            data_load_budget = 300000
+            dynamic_max_samples = int(data_load_budget / num_features)
+
+            if current_train_size > dynamic_max_samples:
+                print(f"Original training sample size: {current_train_size}. Sampling down to {dynamic_max_samples}.")
+                shuffled_indices = np.random.permutation(current_train_size)
+                selected_indices = shuffled_indices[:dynamic_max_samples]
+                X_train = X_train[selected_indices]
+                y_train = y_train[selected_indices]
             
             x_scaler = StandardScaler()
             y_scaler = StandardScaler()

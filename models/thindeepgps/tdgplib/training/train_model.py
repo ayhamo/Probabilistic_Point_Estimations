@@ -17,6 +17,7 @@ _default_schedule = (
     # (iterations , variance, step size)
     (500, 0.01, 0.1),
     (1_000, 0.01, 0.01),
+    # had to reduce it, becuase it takes too much time to do the last phase of training
     #(5_000, True, 0.001)
 )
 
