@@ -104,6 +104,13 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
         
     logger.info(f"TDGP Model Test Mean NLL (scaled): {avg_nll:.4f}")
 
+    # Calculate Regression Metrics (in original data space)
+    # but we have to unscale here becuase then the results would not make sense!
+    # Inverse transform predictions and ground truth to original scale
+    # these will be used alot in CRPS
+    y_pred_unscaled = y_scaler.inverse_transform(y_pred_mean_scaled.numpy())
+    y_test_unscaled = y_scaler.inverse_transform(y_test)
+
     # --- CRPS Calculation ---
     # Unscale the predictive variance. Var(y) = Var(y_scaled * scale_ + mean_) = Var(y_scaled) * scale_^2
     # The scale_ attribute from StandardScaler is what we need.
@@ -121,12 +128,6 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
 
     logger.info(f"TDGP Model Test CRPS (unscaled): {avg_crps:.4f}")
     # --- End of CRPS Calculation ---
-
-    # Calculate Regression Metrics (in original data space)
-    # but we have to unscale here becuase then the results would not make sense!
-    # Inverse transform predictions and ground truth to original scale
-    y_pred_unscaled = y_scaler.inverse_transform(y_pred_mean_scaled.numpy())
-    y_test_unscaled = y_scaler.inverse_transform(y_test)
     
     regression_metrics = evaluation.calculate_regression_metrics(y_test_unscaled, y_pred_unscaled)
 
