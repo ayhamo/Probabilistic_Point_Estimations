@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
+import properscoring as ps
 
 # Libraries from the TDGP paper's codebase
 import gpflow
@@ -103,6 +104,24 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
         
     logger.info(f"TDGP Model Test Mean NLL (scaled): {avg_nll:.4f}")
 
+    # --- CRPS Calculation ---
+    # Unscale the predictive variance. Var(y) = Var(y_scaled * scale_ + mean_) = Var(y_scaled) * scale_^2
+    # The scale_ attribute from StandardScaler is what we need.
+    y_pred_var_unscaled = y_pred_var_scaled.numpy() * (y_scaler.scale_**2)
+    y_pred_std_unscaled = np.sqrt(y_pred_var_unscaled)
+    
+    # Calculate CRPS for each prediction and then average
+    # The inputs must be 1-dimensional
+    crps_scores = ps.crps_gaussian(
+        y_test_unscaled.flatten(), 
+        mu=y_pred_unscaled.flatten(), 
+        sig=y_pred_std_unscaled.flatten()
+    )
+    avg_crps = np.mean(crps_scores)
+
+    logger.info(f"TDGP Model Test CRPS (unscaled): {avg_crps:.4f}")
+    # --- End of CRPS Calculation ---
+
     # Calculate Regression Metrics (in original data space)
     # but we have to unscale here becuase then the results would not make sense!
     # Inverse transform predictions and ground truth to original scale
@@ -110,9 +129,10 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
     y_test_unscaled = y_scaler.inverse_transform(y_test)
     
     regression_metrics = evaluation.calculate_regression_metrics(y_test_unscaled, y_pred_unscaled)
+
     logger.info(f"Test Regression Metrics (unscaled): {regression_metrics}")
     
-    return avg_nll, regression_metrics, y_pred_unscaled
+    return avg_nll, avg_crps, regression_metrics, y_pred_unscaled
 
 def run_TDGP_pipeline(
     source_dataset: str = "openml_ctr23",
@@ -141,9 +161,9 @@ def run_TDGP_pipeline(
 
         if source_dataset == "uci":
             if dataset_key == "protein-tertiary-structure":
-                num_folds_to_run = 5
+                num_folds_to_run = 3#5
             else:
-                num_folds_to_run = 20
+                num_folds_to_run = 10#20
         elif source_dataset == "openml_ctr23":
             num_folds_to_run = 5#10
 
@@ -156,14 +176,13 @@ def run_TDGP_pipeline(
 
         logger.info(f"===== Starting TDGP {num_folds_to_run}-Fold Evaluation for: {dataset_name} ({dataset_key}) =====")
 
-        dataset_fold_metrics = {'nll': [], 'mae': [], 'mse': [], 'rmse': [], 'mape': []}
+        dataset_fold_metrics = {'nll': [], 'mae': [], 'mse': [], 'rmse': [], 'mape': [], 'crps': []}
 
         for fold_idx in range(num_folds_to_run):
             logger.info(f"--- Processing Fold {fold_idx+1}/{num_folds_to_run} for dataset: {dataset_key} ---")
             
             helper.set_all_random_seeds(RANDOM_STATE)
 
-            # Load data
             X_train, y_train, X_test, y_test = \
                 load_preprocessed_data("TDGP", source_dataset, dataset_key, fold_idx,
                         batch_size=0,
@@ -172,7 +191,7 @@ def run_TDGP_pipeline(
             if source_dataset == "openml_ctr23":
                 # Set a maximum size for training, since the scaling is bad
                 current_train_size, num_features = X_train.shape
-                data_load_budget = 300000
+                data_load_budget = 300000 if dataset_key != "361266" else 200000
                 dynamic_max_samples = int(data_load_budget / num_features)
 
                 if current_train_size > dynamic_max_samples:
@@ -197,11 +216,12 @@ def run_TDGP_pipeline(
 
             model_tdgp = initialize_train_tdgp(X_train_s, y_train_s, **tdgp_params)
             
-            avg_nll, reg_metrics, _ = evaluate_tdgp_model(
+            avg_nll, avg_crps, reg_metrics, _ = evaluate_tdgp_model(
                 model_tdgp, X_test_s, y_test_s, y_scaler
             )
 
             dataset_fold_metrics['nll'].append(avg_nll)
+            dataset_fold_metrics['crps'].append(avg_crps)
             dataset_fold_metrics['mae'].append(reg_metrics.get('MAE', np.nan))
             dataset_fold_metrics['mse'].append(reg_metrics.get('MSE', np.nan))
             dataset_fold_metrics['rmse'].append(reg_metrics.get('RMSE', np.nan))
@@ -212,6 +232,8 @@ def run_TDGP_pipeline(
         
         mean_nll = np.nanmean(dataset_fold_metrics['nll'])
         std_nll = np.nanstd(dataset_fold_metrics['nll'])
+        mean_crps = np.nanmean(dataset_fold_metrics['crps'])
+        std_crps = np.nanstd(dataset_fold_metrics['crps'])
         mean_mse = np.nanmean(dataset_fold_metrics['mse'])
         std_mse = np.nanstd(dataset_fold_metrics['mse'])
         mean_rmse = np.nanmean(dataset_fold_metrics['rmse'])
@@ -222,6 +244,7 @@ def run_TDGP_pipeline(
         std_mape = np.nanstd(dataset_fold_metrics['mape'])
 
         logger.info(f"  Average Test NLL: {mean_nll:.4f} ± {std_nll:.4f}")
+        logger.info(f"  Average Test CRPS: {mean_crps:.4f} ± {std_crps:.4f}")
         logger.info(f"  Average Test MSE: {mean_mse:.4f} ± {std_mse:.4f}")
         logger.info(f"  Average Test RMSE: {mean_rmse:.4f} ± {std_rmse:.4f}")
         logger.info(f"  Average Test MAE: {mean_mae:.4f} ± {std_mae:.4f}")
@@ -229,16 +252,26 @@ def run_TDGP_pipeline(
 
         overall_results_summary[dataset_key] = {
             'display_name': dataset_name, 'num_folds': num_folds_to_run,
-            'NLL_mean': mean_nll, 'NLL_std': std_nll, 'MSE_mean': mean_mse, 'MSE_std': std_mse,
-            'RMSE_mean': mean_rmse, 'RMSE_std': std_rmse, 'MAE_mean': mean_mae, 'MAE_std': std_mae,
+            'NLL_mean': mean_nll, 'NLL_std': std_nll,
+            'CRPS_mean': mean_crps, 'CRPS_std': std_crps,
+            'MSE_mean': mean_mse, 'MSE_std': std_mse,
+            'RMSE_mean': mean_rmse, 'RMSE_std': std_rmse,
+            'MAE_mean': mean_mae, 'MAE_std': std_mae,
             'MAPE_mean': mean_mape, 'MAPE_std': std_mape,
         }
         logger.info("===================================================================\n")
     
     # Final Summary for ALL Datasets
-    results_df = pd.DataFrame.from_dict(overall_results_summary, orient='index')
-    logger.info("===== ***** FINAL SUMMARY OF TDGP EVALUATIONS ***** =====")
-    print(results_df)
+    logger.info("===== ***** SUMMARY OF ALL DATASET EVALUATIONS ***** =====")
+    for ds_key, results in overall_results_summary.items():
+        logger.info(f"--- Dataset: {results['display_name']} ({ds_key}) ({results['num_folds']} Folds) ---")
+        logger.info(f"  Average Test NLL: {results['CRPS_mean']:.4f} ± {results['CRPS_std']:.4f}")
+        logger.info(f"  Average Test CRPS: {results['NLL_mean']:.4f} ± {results['NLL_std']:.4f}")
+        logger.info(f"  Average Test MSE: {results['MSE_mean']:.4f} ± {results['MSE_std']:.4f}")
+        logger.info(f"  Average Test RMSE: {results['RMSE_mean']:.4f} ± {results['RMSE_std']:.4f}")
+        logger.info(f"  Average Test MAE: {results['MAE_mean']:.4f} ± {results['MAE_std']:.4f}")
+        logger.info(f"  Average Test MAPE: {results['MAPE_mean']:.2f}% ± {results['MAPE_std']:.2f}%\n")
     logger.info("===== ***** END OF OVERALL SUMMARY ***** =====")
 
+    results_df = pd.DataFrame.from_dict(overall_results_summary, orient='index')
     return results_df

@@ -16,10 +16,10 @@ TODO:
 11. Gaussian Process Regression => https://arxiv.org/abs/2310.11527 Thin and Deep Gaussian Processes (NeurIPS 2023)
 installation explained in requirements.txt and must be followed in order, otherwise it won't work!
 
-X. Implement Diffusion Models
+12. Diffusion Models => Auto-Regressive Moving Diffusion Models for Time Series Forecasting (AAAI 2025)
 
-7. ???
-8. Profit.
+13. ???
+14. Profit.
 
 '''
 

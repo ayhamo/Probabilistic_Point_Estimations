@@ -11,3 +11,6 @@ catboost_info/
 
 models/TTVAEMain/data/
 models/TTVAEMain/synthetic/
+
+models/ARMD/forecasting_exp/
+models/ARMD/Checkpoints_*/
