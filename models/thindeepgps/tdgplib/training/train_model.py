@@ -5,6 +5,7 @@ import gpflow
 import gpflux
 import tensorflow as tf
 from gpflow.base import RegressionData
+from configs.logger_config import global_logger as logger
 
 from .run_optimizer import run_optimizer
 from ..helper.model_utils import get_likelihood_variance
@@ -33,7 +34,7 @@ def train_model(
     #print('Start training')
     last_initial = 0
     for i, (steps, train_variance, step_size) in enumerate(schedule):
-        print(f'#{i} round. {steps} - variance {train_variance} step {step_size:.3e}')
+        logger.info(f'#{i} round. {steps} - variance {train_variance} step {step_size:.3e}')
         opt = tf.optimizers.Adam(step_size)
         if isinstance(train_variance, bool):
             gpflow.set_trainable(variance_parameter, train_variance)

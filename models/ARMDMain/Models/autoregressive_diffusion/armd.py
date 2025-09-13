@@ -195,7 +195,8 @@ class ARMD(nn.Module):
         #img = torch.randn(shape, device=device)
         img = x[:,:pred_len,:]
 
-        for time, time_next in tqdm(time_pairs, desc='sampling loop time step'):
+        #for time, time_next in tqdm(time_pairs, desc='sampling loop time step'):
+        for time, time_next in time_pairs:
             time_cond = torch.full((batch,), time, device=device, dtype=torch.long)
             pred_noise, x_start, *_ = self.model_predictions(img, time_cond, clip_x_start=clip_denoised)
             if time_next < 0:

@@ -23,6 +23,7 @@ installation explained in requirements.txt and must be followed in order, otherw
 
 '''
 
+
 if __name__ == '__main__':
 
     dataset_sources = ["uci", "openml_ctr23", "multivariate"]
@@ -36,7 +37,8 @@ if __name__ == '__main__':
     train_CatBoost = False
     train_TabResNet = False
     train_VAE = False
-    train_GPs = True
+    train_GPs = False
+    train_diffusion = True
 
     if train_TabResFlow:
         from models.TabResFlow import run_TabResFlow_pipeline, run_tabresflow_optuna
@@ -115,6 +117,15 @@ if __name__ == '__main__':
         from models.TDGPs import run_TDGP_pipeline
 
         TDGPs_summary_df = run_TDGP_pipeline(
+        source_dataset = dataset_sources[1],
+        test_datasets = None,
+        )
+    
+    if train_diffusion:
+        from models.ARMD import run_ARMD_pipeline
+
+        TDGPs_summary_df = run_ARMD_pipeline(
         source_dataset = dataset_sources[0],
         test_datasets = None,
+        base_model_save_path_template = None,
         )

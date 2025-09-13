@@ -1,3 +1,4 @@
+import gc
 import os
 import sys
 import time
@@ -9,7 +10,9 @@ from tqdm.auto import tqdm
 from ema_pytorch import EMA
 from torch.optim import Adam
 from torch.nn.utils import clip_grad_norm_
-from Utils.io_utils import instantiate_from_config, get_model_parameters_info
+
+from models.ARMDMain.Utils.io_utils import instantiate_from_config, get_model_parameters_info
+#from Utils.io_utils import instantiate_from_config, get_model_parameters_info
 
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../'))
@@ -34,7 +37,7 @@ class Trainer(object):
         self.args = args
         self.logger = logger
 
-        self.results_folder = Path(config['solver']['results_folder'] + f'_{model.seq_length}')
+        self.results_folder = Path(config['solver']['results_folder'])
         os.makedirs(self.results_folder, exist_ok=True)
 
         start_lr = config['solver'].get('base_lr', 1.0e-4)
@@ -166,4 +169,78 @@ class Trainer(object):
         if self.logger is not None:
             self.logger.log_info('Sampling done, time: {:.2f}'.format(time.time() - tic))
         return samples, reals
+    
+    def sample_forecast_probabilistic(self, raw_dataloader, num_samples=100, shape=None):
+        """
+        Generates a probabilistic forecast using the CPU for memory-intensive storage,
+        avoiding high VRAM usage.
+
+        Args:
+            raw_dataloader: The dataloader for the test set.
+            num_samples (int): The number of sample trajectories to generate for each data point.
+            shape (list): The shape [seq_len, feat_num] of the forecast.
+
+        Returns:
+            A tuple of (samples, reals) as NumPy arrays:
+            - samples (np.ndarray): Ensemble of forecasts with shape [total_points, num_samples, seq_len, feat_num].
+            - reals (np.ndarray): Ground truth with shape [total_points, seq_len, feat_num].
+        """
+        if self.logger is not None:
+            tic = time.time()
+            self.logger.log_info(
+                f'Begin to sample ({num_samples} trajectories per input, CPU storage)...'
+            )
+
+        all_samples_list = []
+        all_reals_list = []
+
+        # Cache for speed
+        device = self.device
+        generate = self.ema.ema_model.generate_mts
+        seq_len, feat_num = shape
+
+        for idx, batch in enumerate(raw_dataloader):
+            # Move the input data to GPU
+            if len(batch) == 2:
+                x, t_m = batch
+                x, t_m = x.to(device), t_m.to(device)
+            else:
+                x = batch.to(device)
+
+            B = x.size(0)
+
+            # Store ground truth immediately on CPU
+            real_for_batch_np = x[:, seq_len:, :].cpu().numpy()
+            all_reals_list.append(real_for_batch_np)
+
+            # Preallocate batch array on CPU
+            batch_samples_np_array = np.empty(
+                (B, num_samples, seq_len, feat_num), dtype=np.float32
+            )
+
+            # Generate samples one by one (or in small chunks if VRAM allows)
+            for i in range(num_samples):
+                with torch.no_grad():
+                    sample_gpu = generate(x)
+                batch_samples_np_array[:, i] = sample_gpu.cpu().numpy()
+                del sample_gpu  # free GPU tensor
+
+            all_samples_list.append(batch_samples_np_array)
+
+            # Free GPU memory
+            del x
+            torch.cuda.empty_cache()
+            gc.collect()
+
+        if self.logger is not None:
+            self.logger.log_info(
+                'Sampling done, time: {:.2f}'.format(time.time() - tic)
+            )
+
+        # Concatenate all batches into final arrays
+        final_samples = np.concatenate(all_samples_list, axis=0)
+        final_reals = np.concatenate(all_reals_list, axis=0)
+
+        return final_samples, final_reals
+
 

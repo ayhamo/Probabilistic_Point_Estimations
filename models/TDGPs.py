@@ -87,8 +87,6 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
     y_pred_var_scaled = f_pred_var + likelihood_variance
     
     # Calculate NLL (in scaled space)
-    # If we try to unscaled NLL, we also have then to transform the variance correctly 
-    # and any mismatch could distort the NLL, so i kept it
     try:
         nll_metrics = uq360.metrics.regression_metrics.compute_regression_metrics(
             y_test,
@@ -101,15 +99,20 @@ def evaluate_tdgp_model(model, X_test, y_test, y_scaler):
     except ValueError as e:
         logger.error(f'Error computing NLL metric: {e}')
         avg_nll = np.nan
-        
+
+    # then i unscale the NLL
+    sigma = y_scaler.scale_[0]
+    log_correction = np.log(sigma)
+    avg_nll = avg_nll + log_correction
+
     logger.info(f"TDGP Model Test Mean NLL (scaled): {avg_nll:.4f}")
 
     # Calculate Regression Metrics (in original data space)
     # but we have to unscale here becuase then the results would not make sense!
     # Inverse transform predictions and ground truth to original scale
     # these will be used alot in CRPS
-    y_pred_unscaled = y_scaler.inverse_transform(y_pred_mean_scaled.numpy())
     y_test_unscaled = y_scaler.inverse_transform(y_test)
+    y_pred_unscaled = y_scaler.inverse_transform(y_pred_mean_scaled.numpy())
 
     # --- CRPS Calculation ---
     # Unscale the predictive variance. Var(y) = Var(y_scaled * scale_ + mean_) = Var(y_scaled) * scale_^2
@@ -162,9 +165,9 @@ def run_TDGP_pipeline(
 
         if source_dataset == "uci":
             if dataset_key == "protein-tertiary-structure":
-                num_folds_to_run = 3#5
+                num_folds_to_run = 5
             else:
-                num_folds_to_run = 10#20
+                num_folds_to_run = 20
         elif source_dataset == "openml_ctr23":
             num_folds_to_run = 5#10
 
@@ -192,7 +195,7 @@ def run_TDGP_pipeline(
             if source_dataset == "openml_ctr23":
                 # Set a maximum size for training, since the scaling is bad
                 current_train_size, num_features = X_train.shape
-                data_load_budget = 300000 if dataset_key != "361266" else 200000
+                data_load_budget = 200000
                 dynamic_max_samples = int(data_load_budget / num_features)
 
                 if current_train_size > dynamic_max_samples:
@@ -262,7 +265,6 @@ def run_TDGP_pipeline(
         }
         logger.info("===================================================================\n")
     
-    # Final Summary for ALL Datasets
     logger.info("===== ***** SUMMARY OF ALL DATASET EVALUATIONS ***** =====")
     for ds_key, results in overall_results_summary.items():
         logger.info(f"--- Dataset: {results['display_name']} ({ds_key}) ({results['num_folds']} Folds) ---")

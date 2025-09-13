@@ -51,3 +51,7 @@ properscoring
 tensorflow-probability==0.24.0
 gpflow==2.10.0
 gpflux
+
+# ARMD
+ema-pytorch
+gluonts

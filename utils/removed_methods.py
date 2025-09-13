@@ -116,3 +116,102 @@ def load_hepmass_data(old=False):
     X_train, y_train = X_train.iloc[:-N_validate], y_train.iloc[:-N_validate]
 
     return X_train, y_train, X_val, y_val, X_test, y_test
+
+def load_power_grid_data():
+    # Adapated from: https://github.com/gpapamak/maf/blob/master/datasets/power.py
+    # Dataset description: http://archive.ics.uci.edu/ml/datasets/Individual+household+electric+power+consumption
+
+    rng = np.random.RandomState(42)
+    # data is Global_active_power, Global_reactive_power, Voltage, Global_intensity, 
+    # Sub_metering_1, Sub_metering_2, Sub_metering_3, Derived time feature (maybe a time stamp? not in original)
+    data = np.load("downloaded_datasets/data/power/data.npy")
+
+    logger.info(f"Processing multivariate dataset power from UCI")
+    rng.shuffle(data)
+    N = data.shape[0]
+
+    # global_intensity, instead of dropping i set it also as target with global_active_power for 2 multi target
+    #data = np.delete(data, 3, axis=1)
+    # global_reactive_power
+    data = np.delete(data, 1, axis=1)
+
+    # Add noise.
+    global_intensity_noise = 0.1*rng.rand(N, 1)
+    voltage_noise = 0.01 * rng.rand(N, 1)
+    gap_noise = 0.001 * rng.rand(N, 1)
+    sm_noise = rng.rand(N, 3)
+    time_noise = np.zeros((N, 1))
+    noise = np.hstack((gap_noise, voltage_noise, global_intensity_noise, sm_noise, time_noise))
+    data = data + noise
+
+    y = data[:, :2]  # First column global active power as target
+    X = data[:, 2:]  # Remaining columns as features
+
+    # Split dataset into train, validation, and test sets
+    N_test = int(0.1 * X.shape[0])
+    X_test, y_test = X[-N_test:], y[-N_test:]
+    X, y = X[:-N_test], y[:-N_test]
+
+    N_validate = int(0.1 * X.shape[0])
+    X_val, y_val = X[-N_validate:], y[-N_validate:]
+    X_train, y_train = X[:-N_validate], y[:-N_validate]
+
+    # Normalize data using training + validation statistics
+    mu = np.concatenate((X_train, X_val)).mean(axis=0)
+    s = np.concatenate((X_train, X_val)).std(axis=0)
+    X_train = (X_train - mu) / s
+    X_val = (X_val - mu) / s
+    X_test = (X_test - mu) / s
+
+    return X_train, X_test, X_val, y_train, y_test, y_val
+
+def get_correlation_numbers(data):
+    C = data.corr()
+    A = C > 0.98
+    B = A.values.sum(axis=1)
+    return B
+
+
+def load_gas_data(old=False):
+    # Adapted from: https://github.com/gpapamak/maf/blob/master/datasets/gas.py
+    # Dataset description: http://archive.ics.uci.edu/ml/datasets/Gas+sensor+array+under+dynamic+gas+mixtures
+
+    if old:
+        # this is broken due to pandas changes, please check https://github.com/gpapamak/maf/tree/master?tab=readme-ov-file#how-to-get-the-datasets
+        data = pd.read_pickle("data/gas/ethylene_CO.pickle")
+        data.drop("Time", axis=1, inplace=True)
+    else:
+        data = np.load("downloaded_datasets/data/gas/gas.npy") 
+        # Time CO2_conc_(ppm) Ethylene_conc_(ppm) Sensor1 ... Sensor16
+        #TODO handle to download it from somehwere! currently can be gotten from https://www.kaggle.com/code/ayhamo/fix-multivarate-datasets
+        data = pd.DataFrame(data)
+        # Drop the first column (Time)
+        data.drop(columns=[0], inplace=True)
+
+   # target (second & third columns) - 2 feautres
+    y = data.iloc[:, :2] 
+
+    X = data.iloc[:, 2:]
+
+    # Remove highly correlated columns
+    B = get_correlation_numbers(X)  # only feautres
+    while np.any(B > 1):
+        col_to_remove = np.where(B > 1)[0][0]
+        col_name = X.columns[col_to_remove]
+        X = X.drop(col_name, axis=1)
+        B = get_correlation_numbers(X)
+
+    # Normalize data
+    X = (X - X.mean()) / X.std()
+    y = (y - y.mean()) / y.std()
+
+    # Split dataset
+    N_test = int(0.1 * X.shape[0])
+    X_test, y_test = X.iloc[-N_test:], y.iloc[-N_test:]
+    X_train, y_train = X.iloc[:-N_test], y.iloc[:-N_test]
+
+    N_validate = int(0.1 * X_train.shape[0])
+    X_val, y_val = X_train.iloc[-N_validate:], y_train.iloc[-N_validate:]
+    X_train, y_train = X_train.iloc[:-N_validate], y_train.iloc[:-N_validate]
+
+    return X_train, y_train, X_val, y_val, X_test, y_test

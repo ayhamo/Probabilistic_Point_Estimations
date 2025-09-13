@@ -67,6 +67,20 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         y_train_full_raw_df = load_uci_data_segment(fp_data, fp_index_target, fp_index_train_rows)
         x_test_raw_df = load_uci_data_segment(fp_data, fp_index_features, fp_index_test_rows)
         y_test_raw_df = load_uci_data_segment(fp_data, fp_index_target, fp_index_test_rows)
+
+        if model == "ARMD":
+            train_df = pd.concat([x_train_full_raw_df, y_train_full_raw_df], axis=1)
+            test_df = pd.concat([x_test_raw_df, y_test_raw_df], axis=1)
+            # Combine train and test into one DataFrame
+            full_df = pd.concat([train_df, test_df], axis=0)
+
+            # Shuffle the combined DataFrame
+            full_df = full_df.sample(frac=1).reset_index(drop=True)
+            data = full_df.values
+            
+            scaler = StandardScaler()
+            scaler = scaler.fit(data)
+            return data, scaler
         
         # Convert to NumPy arrays
         X_train = x_train_full_raw_df.to_numpy()
@@ -152,10 +166,10 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
         logger.info(f"fetching {dataset_name} ({dataset_identifier}) from UCI.")
         
         if dataset_identifier == "gas":
-            X_train, X_test, X_val, y_train, y_test, y_val = load_gas_data()
+            X_train, X_test, X_val, y_train, y_test, y_val = None#load_gas_data()
         
         if dataset_identifier == "power_grid":
-            X_train, X_test, X_val, y_train, y_test, y_val = load_power_grid_data()
+            X_train, X_test, X_val, y_train, y_test, y_val = None#load_power_grid_data()
             
             # Convert NumPy arrays to Pandas DataFrames
             X_train = pd.DataFrame(X_train)
@@ -243,6 +257,20 @@ def load_preprocessed_data(model, source, dataset_identifier, fold = 0,
             train_df = pd.concat([pd.DataFrame(X_train), pd.DataFrame(y_train)], axis=1)
             test_df = pd.concat([pd.DataFrame(X_test), pd.DataFrame(y_test)], axis=1)
             return train_df, test_df
+
+        if model == "ARMD":
+            train_df = pd.concat([pd.DataFrame(X_train), pd.DataFrame(y_train)], axis=1)
+            test_df = pd.concat([pd.DataFrame(X_test), pd.DataFrame(y_test)], axis=1)
+            # Combine train and test into one DataFrame
+            full_df = pd.concat([train_df, test_df], axis=0)
+
+            # Shuffle the combined DataFrame
+            full_df = full_df.sample(frac=1).reset_index(drop=True)
+            data = full_df.values
+            
+            scaler = StandardScaler()
+            scaler = scaler.fit(data)
+            return data, scaler
 
         if model != "TabResFlow":
             # for all models
@@ -351,6 +379,176 @@ def reduce_dataset_size(X_train, y_train, X_test, y_test, max_samples=10000, ran
 
     return X_train, y_train, X_test, y_test
 
+from torch.utils.data import Dataset
+from models.ARMDMain.Models.autoregressive_diffusion.model_utils import normalize_to_neg_one_to_one, unnormalize_to_zero_to_one
+from models.ARMDMain.Utils.masking_utils import noise_mask
+
+
+class ARMDDataset(Dataset):
+    def __init__(
+        self,
+        source,
+        dataset_identifier,
+        fold,
+        window=64, 
+        proportion=0.8, 
+        save2npy=False, 
+        neg_one_to_one=True,
+        seed=123,
+        period='train',
+        output_dir='./OUTPUT',
+        predict_length=None,
+        missing_ratio=None,
+        style='separate', 
+        distribution='geometric', 
+        mean_mask_length=3
+    ):
+        super(ARMDDataset, self).__init__()
+        assert period in ['train', 'test'], 'period must be train or test.'
+        if period == 'train':
+            assert not(predict_length is not None or missing_ratio is not None), ''
+
+        self.name, self.pred_len, self.missing_ratio = dataset_identifier, predict_length, missing_ratio
+        self.style, self.distribution, self.mean_mask_length = style, distribution, mean_mask_length
+        #self.rawdata, self.scaler = self.read_data(data_root, self.name)
+        self.rawdata, self.scaler = load_preprocessed_data("ARMD", source, dataset_identifier, fold,
+                           batch_size=0, openml_pre_prcoess = True)
+        self.dir = os.path.join(output_dir, 'samples')
+        os.makedirs(self.dir, exist_ok=True)
+
+        self.window, self.period = window, period
+        self.len, self.var_num = self.rawdata.shape[0], self.rawdata.shape[-1]
+        self.sample_num_total = max(self.len - self.window + 1, 0)
+        self.save2npy = save2npy
+        #self.auto_norm = neg_one_to_one
+        self.auto_norm = False
+
+        self.data = self.__normalize(self.rawdata)
+        train, inference = self.__getsamples(self.data, proportion, seed)
+
+        self.samples = train if period == 'train' else inference
+        if period == 'test':
+            if missing_ratio is not None:
+                self.masking = self.mask_data(seed)
+            elif predict_length is not None:
+                masks = np.ones(self.samples.shape)
+                masks[:, -predict_length:, :] = 0
+                self.masking = masks.astype(bool)
+            else:
+                raise NotImplementedError()
+        self.sample_num = self.samples.shape[0]
+  
+
+    def __getsamples(self, data, proportion, seed):
+        x = np.zeros((self.sample_num_total, self.window, self.var_num))
+        for i in range(self.sample_num_total):
+            start = i
+            end = i + self.window
+            x[i, :, :] = data[start:end, :]
+
+        train_data, test_data = self.divide(x, proportion, seed)
+
+        if self.save2npy:
+            if 1 - proportion > 0:
+                np.save(os.path.join(self.dir, f"{self.name}_ground_truth_{self.window}_test.npy"), self.unnormalize(test_data))
+            np.save(os.path.join(self.dir, f"{self.name}_ground_truth_{self.window}_train.npy"), self.unnormalize(train_data))
+            if self.auto_norm:
+                if 1 - proportion > 0:
+                    np.save(os.path.join(self.dir, f"{self.name}_norm_truth_{self.window}_test.npy"), unnormalize_to_zero_to_one(test_data))
+                np.save(os.path.join(self.dir, f"{self.name}_norm_truth_{self.window}_train.npy"), unnormalize_to_zero_to_one(train_data))
+            else:
+                if 1 - proportion > 0:
+                    np.save(os.path.join(self.dir, f"{self.name}_norm_truth_{self.window}_test.npy"), test_data)
+                np.save(os.path.join(self.dir, f"{self.name}_norm_truth_{self.window}_train.npy"), train_data)
+
+        return train_data, test_data
+
+    def normalize(self, sq):
+        d = sq.reshape(-1, self.var_num)
+        d = self.scaler.transform(d)
+        if self.auto_norm:
+            d = normalize_to_neg_one_to_one(d)
+        return d.reshape(-1, self.window, self.var_num)
+
+    def unnormalize(self, sq):
+        d = self.__unnormalize(sq.reshape(-1, self.var_num))
+        return d.reshape(-1, self.window, self.var_num)
+    
+    def __normalize(self, rawdata):
+        data = self.scaler.transform(rawdata)
+        if self.auto_norm:
+            data = normalize_to_neg_one_to_one(data)
+        return data
+
+    def __unnormalize(self, data):
+        if self.auto_norm:
+            data = unnormalize_to_zero_to_one(data)
+        x = data
+        return self.scaler.inverse_transform(x)
+    
+    @staticmethod
+    def divide(data, ratio, seed=2023):
+        size = data.shape[0]
+        # Store the state of the RNG to restore later.
+        st0 = np.random.get_state()
+        np.random.seed(seed)
+
+        regular_train_num = int(np.ceil(size * ratio))
+        #id_rdm = np.random.permutation(size)
+        id_rdm = np.arange(size)
+        regular_train_id = id_rdm[:regular_train_num]
+        irregular_train_id = id_rdm[regular_train_num:]
+
+        regular_data = data[regular_train_id, :]
+        irregular_data = data[irregular_train_id, :]
+
+        # Restore RNG.
+        np.random.set_state(st0)
+        return regular_data, irregular_data
+
+    @staticmethod
+    def read_data(filepath, name=''):
+        """Reads a single .csv
+        """
+        df = pd.read_csv(filepath, header=0)
+        if name == 'etth':
+            df.drop(df.columns[0], axis=1, inplace=True)
+        data = df.values
+        #scaler = MinMaxScaler()
+        scaler = StandardScaler()
+        scaler = scaler.fit(data)
+        return data, scaler
+    
+    def mask_data(self, seed=2023):
+        masks = np.ones_like(self.samples)
+        # Store the state of the RNG to restore later.
+        st0 = np.random.get_state()
+        np.random.seed(seed)
+
+        for idx in range(self.samples.shape[0]):
+            x = self.samples[idx, :, :]  # (seq_length, feat_dim) array
+            mask = noise_mask(x, self.missing_ratio, self.mean_mask_length, self.style,
+                              self.distribution)  # (seq_length, feat_dim) boolean array
+            masks[idx, :, :] = mask
+
+        if self.save2npy:
+            np.save(os.path.join(self.dir, f"{self.name}_masking_{self.window}.npy"), masks)
+
+        # Restore RNG.
+        np.random.set_state(st0)
+        return masks.astype(bool)
+
+    def __getitem__(self, ind):
+        if self.period == 'test':
+            x = self.samples[ind, :, :]  # (seq_length, feat_dim) array
+            m = self.masking[ind, :, :]  # (seq_length, feat_dim) boolean array
+            return torch.from_numpy(x).float(), torch.from_numpy(m)
+        x = self.samples[ind, :, :]  # (seq_length, feat_dim) array
+        return torch.from_numpy(x).float()
+
+    def __len__(self):
+        return self.sample_num
+
 class CollapseRareLevels(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=1000):
         super().__init__()
@@ -412,102 +610,3 @@ def make_openml_preprocessor(X_train_raw, include_onehot):
             ('impute', HistogramImputer())
         ]), numerical_cols)
     ])
-
-def load_power_grid_data():
-    # Adapated from: https://github.com/gpapamak/maf/blob/master/datasets/power.py
-    # Dataset description: http://archive.ics.uci.edu/ml/datasets/Individual+household+electric+power+consumption
-
-    rng = np.random.RandomState(42)
-    # data is Global_active_power, Global_reactive_power, Voltage, Global_intensity, 
-    # Sub_metering_1, Sub_metering_2, Sub_metering_3, Derived time feature (maybe a time stamp? not in original)
-    data = np.load("downloaded_datasets/data/power/data.npy")
-
-    logger.info(f"Processing multivariate dataset power from UCI")
-    rng.shuffle(data)
-    N = data.shape[0]
-
-    # global_intensity, instead of dropping i set it also as target with global_active_power for 2 multi target
-    #data = np.delete(data, 3, axis=1)
-    # global_reactive_power
-    data = np.delete(data, 1, axis=1)
-
-    # Add noise.
-    global_intensity_noise = 0.1*rng.rand(N, 1)
-    voltage_noise = 0.01 * rng.rand(N, 1)
-    gap_noise = 0.001 * rng.rand(N, 1)
-    sm_noise = rng.rand(N, 3)
-    time_noise = np.zeros((N, 1))
-    noise = np.hstack((gap_noise, voltage_noise, global_intensity_noise, sm_noise, time_noise))
-    data = data + noise
-
-    y = data[:, :2]  # First column global active power as target
-    X = data[:, 2:]  # Remaining columns as features
-
-    # Split dataset into train, validation, and test sets
-    N_test = int(0.1 * X.shape[0])
-    X_test, y_test = X[-N_test:], y[-N_test:]
-    X, y = X[:-N_test], y[:-N_test]
-
-    N_validate = int(0.1 * X.shape[0])
-    X_val, y_val = X[-N_validate:], y[-N_validate:]
-    X_train, y_train = X[:-N_validate], y[:-N_validate]
-
-    # Normalize data using training + validation statistics
-    mu = np.concatenate((X_train, X_val)).mean(axis=0)
-    s = np.concatenate((X_train, X_val)).std(axis=0)
-    X_train = (X_train - mu) / s
-    X_val = (X_val - mu) / s
-    X_test = (X_test - mu) / s
-
-    return X_train, X_test, X_val, y_train, y_test, y_val
-
-def get_correlation_numbers(data):
-    C = data.corr()
-    A = C > 0.98
-    B = A.values.sum(axis=1)
-    return B
-
-
-def load_gas_data(old=False):
-    # Adapted from: https://github.com/gpapamak/maf/blob/master/datasets/gas.py
-    # Dataset description: http://archive.ics.uci.edu/ml/datasets/Gas+sensor+array+under+dynamic+gas+mixtures
-
-    if old:
-        # this is broken due to pandas changes, please check https://github.com/gpapamak/maf/tree/master?tab=readme-ov-file#how-to-get-the-datasets
-        data = pd.read_pickle("data/gas/ethylene_CO.pickle")
-        data.drop("Time", axis=1, inplace=True)
-    else:
-        data = np.load("downloaded_datasets/data/gas/gas.npy") 
-        # Time CO2_conc_(ppm) Ethylene_conc_(ppm) Sensor1 ... Sensor16
-        #TODO handle to download it from somehwere! currently can be gotten from https://www.kaggle.com/code/ayhamo/fix-multivarate-datasets
-        data = pd.DataFrame(data)
-        # Drop the first column (Time)
-        data.drop(columns=[0], inplace=True)
-
-   # target (second & third columns) - 2 feautres
-    y = data.iloc[:, :2] 
-
-    X = data.iloc[:, 2:]
-
-    # Remove highly correlated columns
-    B = get_correlation_numbers(X)  # only feautres
-    while np.any(B > 1):
-        col_to_remove = np.where(B > 1)[0][0]
-        col_name = X.columns[col_to_remove]
-        X = X.drop(col_name, axis=1)
-        B = get_correlation_numbers(X)
-
-    # Normalize data
-    X = (X - X.mean()) / X.std()
-    y = (y - y.mean()) / y.std()
-
-    # Split dataset
-    N_test = int(0.1 * X.shape[0])
-    X_test, y_test = X.iloc[-N_test:], y.iloc[-N_test:]
-    X_train, y_train = X.iloc[:-N_test], y.iloc[:-N_test]
-
-    N_validate = int(0.1 * X_train.shape[0])
-    X_val, y_val = X_train.iloc[-N_validate:], y_train.iloc[-N_validate:]
-    X_train, y_train = X_train.iloc[:-N_validate], y_train.iloc[:-N_validate]
-
-    return X_train, y_train, X_val, y_val, X_test, y_test
