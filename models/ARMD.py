@@ -30,7 +30,7 @@ def initialize_ARMD_model(configs, dataloader, device):
     return trainer
 
 
-def evaluate_ARMD_model(trainer, test_dataloader, test_dataset, seq_len):
+def evaluate_ARMD_model(trainer, test_dataloader, test_dataset, seq_len, num_samples):
     """
     Evaluates a trained ARMD model, calculating NLL, CRPS and regression metrics.
 
@@ -41,7 +41,7 @@ def evaluate_ARMD_model(trainer, test_dataloader, test_dataset, seq_len):
     pred_length = seq_len
     real = test_scaled
     
-    sample, real_ = trainer.sample_forecast_probabilistic(test_dataloader, num_samples=100, shape=[seq_len, feat_num])
+    sample, real_ = trainer.sample_forecast_probabilistic(test_dataloader, num_samples=num_samples, shape=[seq_len, feat_num])
     mask = test_dataset.masking
 
     # --- 2. Inverse Transform (Un-scale) Data to Original Scale ---
@@ -66,7 +66,17 @@ def evaluate_ARMD_model(trainer, test_dataloader, test_dataset, seq_len):
 
     # Now, perform calculations using PyTorch's API (with 'dim')
     mu = sample_unscaled_tensor.mean(dim=1)
-    sigma = sample_unscaled_tensor.std(dim=1)
+
+    # a failsafe to replace nans
+    # Check if we have enough samples to compute std
+    if sample_unscaled_tensor.shape[1] < 2:
+        print("not safe, doing dummy std!")
+        # Not enough samples — fallback to small constant std
+        sigma = torch.tensor(1e-2, device=sample_unscaled_tensor.device)
+    else:
+        # Safe to compute std
+        sigma = sample_unscaled_tensor.std(dim=1)
+
     sigma = torch.clamp(sigma, min=1e-2)
 
     dist = Normal(loc=mu, scale=sigma)
@@ -102,7 +112,7 @@ def run_ARMD_pipeline(
     base_model_save_path_template : str = None
     ):
     """
-    Runs the XGBoost model training and evaluation pipeline.
+    Runs the ARMD model training and evaluation pipeline.
 
     Args:
         source_dataset_type (str): The source of the datasets (e.g., "openml_ctr23").
@@ -131,6 +141,11 @@ def run_ARMD_pipeline(
     overall_results_summary = {} # To store aggregated results for each dataset
     
     for dataset_key, dataset_info_dict in datasets_to_run.items():
+
+        # currently wave_energy cannot be run on kaggle
+        if dataset_key == "361253":
+            continue
+        
         dataset_name = dataset_info_dict.get('name', dataset_key)
         
         if source_dataset == "uci":
@@ -289,8 +304,25 @@ def run_ARMD_pipeline(
 
             logger.info(f"Evaluating ARMD on test set for {dataset_name}, Fold {fold_idx}...")
 
+            num_samples = 30
+            
+            # wave_energy is skipped, i cannot get it to work on kaggle due to hardware constrains
+
+            if dataset_key in ("361266", "361268", "361272"): #kings_country, fps_benchmark, fifa
+                num_samples = 1
+                            
+            if dataset_key in ("361252", "361242"): #video_transcoding, superconductivity
+                num_samples = 2
+
+            #sacros, daimonds, brazilian_houses, health_insurance, physiochemical_protein    
+            if dataset_key in ("361254" , "361257" , "361267", "361269", "361241"):
+                num_samples = 5
+                
+            if dataset_key in ("361261"): #cps88wages
+                num_samples = 20
+
             avg_nll, avg_crps, reg_metrics = evaluate_ARMD_model(
-               trainer, test_dataloader, test_dataset, pred_len, # pred_len is seq_len
+               trainer, test_dataloader, test_dataset, pred_len, num_samples # pred_len is seq_len
             )
 
             dataset_fold_metrics['nll'].append(avg_nll)
@@ -302,7 +334,7 @@ def run_ARMD_pipeline(
 
        
         # AGGREGATED RESULTS for the current dataset
-        logger.info(f"===== AGGREGATED XGBoost RESULTS for {dataset_name} ({dataset_key}) over {num_folds_to_run} Folds =====")
+        logger.info(f"===== AGGREGATED ARMD RESULTS for {dataset_name} ({dataset_key}) over {num_folds_to_run} Folds =====")
         
         mean_nll = np.nanmean(dataset_fold_metrics['nll'])
         std_nll = np.nanstd(dataset_fold_metrics['nll'])
