@@ -311,11 +311,11 @@ def run_ARMD_pipeline(
             if dataset_key in ("361266", "361268", "361272"): #kings_country, fps_benchmark, fifa
                 num_samples = 1
                             
-            if dataset_key in ("361252", "361242"): #video_transcoding, superconductivity
+            if dataset_key in ("361252", "361257", "361242"): #video_transcoding, daimonds, superconductivity
                 num_samples = 2
 
-            #sacros, daimonds, brazilian_houses, health_insurance, physiochemical_protein    
-            if dataset_key in ("361254" , "361257" , "361267", "361269", "361241"):
+            #uci: protein-tertiary-structure, openML: sacros, brazilian_houses, health_insurance, physiochemical_protein 
+            if dataset_key in ("protein-tertiary-structure", "361254" , "361267", "361269", "361241"):
                 num_samples = 5
                 
             if dataset_key in ("361261"): #cps88wages
