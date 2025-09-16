@@ -142,8 +142,8 @@ def run_ARMD_pipeline(
     
     for dataset_key, dataset_info_dict in datasets_to_run.items():
 
-        # currently wave_energy cannot be run on kaggle
-        if dataset_key == "361253":
+        # currently wave_energy and fifa cannot be run on kaggle
+        if dataset_key in ("361253", "361272"):
             continue
         
         dataset_name = dataset_info_dict.get('name', dataset_key)
@@ -306,9 +306,9 @@ def run_ARMD_pipeline(
 
             num_samples = 30
             
-            # wave_energy is skipped, i cannot get it to work on kaggle due to hardware constrains
+            # wave_energy and fifa is skipped, i cannot get it to work on kaggle due to hardware constrains
 
-            if dataset_key in ("361266", "361268", "361272"): #kings_country, fps_benchmark, fifa
+            if dataset_key in ("361266", "361268"): #kings_country, fps_benchmark
                 num_samples = 1
                             
             if dataset_key in ("361252", "361257", "361242"): #video_transcoding, daimonds, superconductivity
