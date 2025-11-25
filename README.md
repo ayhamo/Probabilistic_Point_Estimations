@@ -9,67 +9,70 @@ For My datasets:
 # Questions and answers
 
 
-### 1. How does MSE(ŷP) compare to MSE(f(x)) in practice? Is the assumption MSE(ŷP) ≥ MSE(f(x)) generally true empirically?
+### How does MSE($\hat{y}_P$) compare to MSE($f(x)$) in practice? Is the assumption MSE($\hat{y}_P$) $\geq$ MSE($f(x)$) generally true empirically?
 
-Yes, the assumption that MSE(ŷP) ≥ MSE(f(x)) is generally true empirically.
+**Yes, the assumption that point estimation models are superior in terms of point prediction accuracy is strongly supported by the empirical evidence.** The statistical analysis presented in the Critical Difference Diagrams for both MAE and RMSE confirms this. This is explained in depth in section 5.1 with reasoning behind it.
 
-The SOTA point predictors, specifically TabPFN and XGBoost, consistently achieved lower MSE and RMSE values than the point estimates derived from any of the probabilistic models across the majority of both UCI and OpenML-CTR23 datasets. This confirms that models directly optimized for point-wise error are, on average, more accurate for the specific current task.
+### How do different classes of probabilistic models (VAEs, Flows, Diffusion, GPRs) perform in terms of derived point estimates?
 
-However, the key finding is that this is not a universal saying (which is why i asked genrally!) but a strong trend. the performance gap varies significantly, and in several cases, a top-tier probabilistic model like Thin and Deep Gaussian Processes (TDGPs) produced point estimates that were highly competitive, with negligible margin or even outperforming some of the point predictors (color me suprised, since that paper is recent[NeurIPS 2023] and the one i stuggeld to run the most).
+**There is a clearly defined performance hierarchy among the probabilistic models.** The choice of architecture is a critical determinant of a model's viability for point prediction.
 
-### 2. How do different classes of probabilistic models perform in terms of derived point estimates?
+*   **The best:** **Thin and Deep Gaussian Processes (TDGPs)** were unequivocally the strongest probabilistic model for point prediction. As shown in the CRPS vs. RMSE plot, it achieved an RMSE that was not only the best among probabilistic models but was also competitive with some of the weaker point predictors.
+*   **Viable Baselines:** **TabResFlow** and **TTVAE** delivered point estimates that were significantly worse than the top point predictors. TabResFlow's performance was more stable, establishing it as a reliable probabilistic baseline. TTVAE's point estimates were extremely poor, which is an expected consequence of the VAE objective function that prioritizes reconstruction over precise conditional mean prediction.
+*   **Failure:** **Auto-Regressive Moving Diffusion Models (ARMD)** failed catastrophically. Its RMSE values were several orders of magnitude worse than all other models.
 
-There is a clear and big performance hierarchy among the different classes of probabilistic models:
+### Does good performance on probabilistic metrics (NLL, CRPS) correlate with good performance on point metrics (MSE, MAE)?
 
-*   **Top (Competitive): Thin and Deep Gaussian Processes (TDGPs)** was the strongest performer. the derived point estimates were consistently the best among the probabilistic models and were often competitive with the dedicated point predictors like CatBoost and XGBoost.
-*   **Reliable (Good Baseline): TabResFlow** solid and reliable model. Its point estimates were generally reasonable and better than the more problematic models, but they did not typically challenge the top-tier point predictors.
-*   **Problematic (Unreliable):**
-    *   **Tabular Transformer VAE (TTVAE):** This model was difficult to evaluate fairly. While its NLL metric was invalid (due to optimizing the ELBO), its CRPS scores were often respectable. However, its derived point estimates were not competitive with the top models.
-    *   **Auto-Regressive Moving Diffusion Models (ARMD):** This model class failed badly for this task. The MSE, RMSE, and MAE values were orders of magnitude worse than all other models, rendering its point estimates completely unusable. 
+**Yes, there is a moderate positive correlation, but it is imperfect and comes with some side notes.**
 
-    This is a critical finding that demonstrates that not all advanced generative architectures are suitable for general-purpose tabular regression.
+*   **CRPS as an Indicator:** A low (good) CRPS generally correlates with a low (good) RMSE. This is because CRPS is a proper scoring rule that assesses the entire distribution, including its location. It is difficult for a model to achieve a good CRPS if the center of its predictive distribution is far from the true value. TDGPs, for example, scored well on both.
+*   **NLL as a Complicated Indicator:** The correlation with NLL is weaker and more complex. Our results show that the best NLL scores were achieved by **TabPFN**, despite it not being a true probabilistic model. This confirms that an excellent point prediction is the dominant factor in achieving a good likelihood score, often outweighing the benefits of a complex distributional shape. Conversely, models like TTVAE can score well on CRPS (distributional shape) but fail on NLL (likelihood scale), further decoupling these metrics.
 
-### 3. Does good performance on probabilistic metrics (NLL, CRPS) correlate with good performance on point metrics (MSE, MAE)?
+Therefore, while good probabilistic performance is a positive signal, it does not guarantee the best point prediction accuracy.
 
-Yes, there is a moderate positive correlation, but it is not perfect and comes with some side notes.
+### Under which conditions might point estimates from probabilistic models be better than dedicated point predictors?
 
-*   **CRPS is a more reliable indicator than NLL.** Generally, models that achieved a low (good) CRPS also had a low (good) MSE. This makes sense, as CRPS evaluates the entire predictive distribution's accuracy and calibration. It is difficult for a model to have a good CRPS if the center of its predicted distribution (i.e., its point estimate) is far from the true value.
-*   **NLL proved to be a problematic correlator** For TTVAE, the NLL was an invalid metric. For ARMD, the NLL was extremely poor, which did correlate with its terrible MSE. For a well-behaved model like TabResFlow, good NLL generally corresponded to good MSE.
+While our results confirm that good point estimators like TabPFN and XGBoost generally outperform probabilistic models on point-wise metrics, the advantage is not absolute. A well made probabilistic model can in fact rival them with very minor lose. Our results indicate that this is most likely to occur when the probabilistic model's architecture provides a suitable assumptions about the structure of the data it is trying to learn. This manifests in two primary scenarios:
 
-### 4. Investigate the correlation and trade-offs between performance on probabilistic metrics and point estimation metrics. Under which conditions are probabilistic models better?
+*   Standard point estimators, particularly tree-based models like XGBoost, are powerful but have their own inductive biases. GBDTs, for example, model functions as a sum of piece-wise constant decision trees. While highly effective, this may be a suboptimal representation for inherently smooth and highly non-stationary functions.
 
-The models that exclusively minimized RMSE (XGBoost, TabPFN) generally had the best RMSE.
+    A probabilistic model with a different and more suitable inductive bias can gain an advantage. **Thin and Deep Gaussian Processes (TDGPs)** are a prime example. As a Gaussian Process-based model, its fundamental inductive bias is towards smoothness, which may be a better fit for certain physical or natural processes present in the data. Its hierarchical architecture is explicitly designed to model non-stationarity by learning a locally-varying lengthscale.
 
-Point estimates derived from probabilistic models were likely to be better than dedicated point predictors under two  conditions:
+    Therefore, if the true underlying function $E[Y|X]$ is very smooth or non-stationary, a model like TDGP might learn a more faithful representation of this function than a GBDT. By more accurately capturing the true conditional mean function, its derived point estimate (the mean of its predictive distribution) can consequently be more accurate. The strong performance of TDGPs on datasets like `kin8nm` suggests this phenomenon may be at play.
 
-1.  **When the Probabilistic Model is Powerful:** The only probabilistic model that consistently challenged the point predictors was TDGPs. This suggests that only well made probabilistic architectures can overcome the disadvantage of not directly optimizing for a point-wise loss function.
-2.  **On Datasets with Potentially Complex Structures:** While not definitively proven, it is possible that datasets like `kin8nm`, where TDGPs performed very well, may have characteristics that are better captured by a flexible model like a Gaussian Process. A GP can learn a more accurate representation of the underlying function, leading to a more accurate mean prediction, whereas models that implicitly assume a simpler error distribution might be disadvantaged.
+*   Standard regression models trained with an MSE loss implicitly assume that the error distribution (noise) is homoscedastic (i.e., has constant variance) and often behave as if it were Gaussian. When these assumptions are violated, the model's performance can degrade.
 
-### 5. Relationship (or lack of) and the variance between probabilistic performance and point estimation accuracy in practice.
+A flexible probabilistic model can gain an advantage by correctly accounting for the true structure of the noise, thereby preventing the learning process from being misled. Specific conditions include:
 
-The relationship can be described as a "soft hierarchy". Better probabilistic performance (especially low CRPS) generally leads to better point estimation accuracy. However, there is a "specialist's edge," where models that focus solely on point prediction can often fine-tune their results to be slightly better on that specific metric.
+*   **Heteroscedasticity:** If the variance of the target variable changes depending on the input features, a standard point estimator might struggle. A flexible probabilistic model like **TabResFlow** can learn this input-dependent variance. By correctly modeling regions of high and low uncertainty, it can more effectively isolate the underlying "signal" (the mean function), leading to a more accurate point estimate.
+*   **Multi-modality or Heavy Skewness:** If the true conditional distribution $P(y|x)$ is multi-modal (has multiple peaks) or heavily skewed, an MSE-based point estimator can be pulled towards a compromise value that is not representative of any true mode. A probabilistic model capable of capturing this complex shape (such as a Normalizing Flow or a VAE) learns a more robust representation of the entire data landscape. Its derived mean or mode is therefore less likely to be distorted by the unusual distribution shape.
 
-one imporant thing to note is that the variance in performance is extremely high, particularly across the different architectures of probabilistic models.
-*   The gap between a top-performing probabilistic model (TDGPs) and a failing one (ARMD) is huge, basiclly that the choice of architecture is far more critical than in the more mature field of point predictors.
+In summary, to directly answer the question: a well-made point estimator will generally beat a well-made probabilistic model on datasets that align with its inductive biases (e.g., piece-wise constant functions with simple noise). However, a probabilistic model can achieve a more accurate point estimate when the dataset's underlying structure—either the function itself or its error distribution—violates the implicit assumptions of the point estimator, provided the probabilistic model has the correct architectural biases to capture that structure more faithfully.
+
+### What is the relationship and variance between probabilistic performance and point estimation accuracy in practice?
+
+The relationship can be best described as a **"soft hierarchy" with extremely high variance across probabilistic architectures**.
+
+Better probabilistic performance (especially low CRPS) generally leads to better point estimation accuracy. However, there is a "specialist's edge," where models that focus solely on point prediction can often fine-tune their results to be slightly better on that specific metric.
+
+One important thing to note is that the variance in performance is extremely high, particularly across the different architectures of probabilistic models.
+
+*   The gap between a top-performing probabilistic model (TDGPs) and a failing one (ARMD) is huge, basically that the choice of architecture is far more critical than in the more mature field of point predictors.
 *   The variance in results across the 35 OpenML-CTR23 datasets for all models indicates that tabular data in the wild is incredibly diverse and challenging, with no single model winning universally.
 
-### 6. Identify conditions (datasets, model types) where probabilistic models offer competitive or superior point estimates.
+***
 
-*   **Model Type:** The only model type that consistently offered competitive or superior point estimates was Thin and Deep Gaussian Processes (TDGPs) (but i also have to mention that it consomes the most resoruces and hardest to setup!).
-*   **Datasets (Superior):** The most notable one is `kin8nm`, where TDGPs achieved an RMSE (0.0636) that was better than CatBoost (0.1042) and competitive with TabPFN (0.0704).
-*   **Datasets (Competitive):** On many of the classic UCI datasets like `Concrete`, `Energy`, and `Power`, the performance gap between TDGPs and the point predictors was very small. In these cases, the minor (if any) sacrifice in point accuracy would be well worth the significant benefit of gaining a full probabilistic forecast.
+**Consolidated Ranking and Summary of All Models**
 
-### 7. Small Table Ranking All the Methods
+Based on the entirety of the experimental results, the models can be ranked into distinct tiers that reflect their practical utility for the tasks investigated in this thesis.
 
-This table ranks the models based on their overall performance and reliability for their intended purpose, as demonstrated in your results.
-
-| **Tier** | **Model(s)** | **Primary Role** | **Strengths & Weaknesses** |
+| Tier | Model(s) | Primary Role | Key Strengths & Weaknesses |
 | :--- | :--- | :--- | :--- |
-| **Tier 1: SOTA Point Prediction** | TabPFN, XGBoost | Point Estimation | **Strengths:** Consistently highest point accuracy (lowest RMSE/MAE). Robust and reliable. <br> **Weaknesses:** Provide no direct uncertainty information. |
-| **Tier 2: Competitive All-Rounders** | TDGPs, CatBoost, TabResFlow | Probabilistic & Point | **Strengths:** TDGPs offer excellent probabilistic forecasts with highly competitive point accuracy. CatBoost is a robust point predictor. TabResFlow is a reliable probabilistic baseline. <br> **Weaknesses:** TDGPs can be difficult to implement. |
-| **Tier 3: Good but Outperformed** | TabResNet | Point Estimation | **Strengths:** A decent deep learning baseline. <br> **Weaknesses:** Generally outperformed by gradient boosting and TabPFN on point accuracy. |
-| **Tier 4: Niche / Problematic** | TTVAE | Probabilistic | **Strengths:** Can produce reasonable probabilistic forecasts (based on CRPS). <br> **Weaknesses:** Unreliable NLL metric makes evaluation difficult; not competitive on point accuracy. |
-| **Tier 5: Failed in this Context** | ARMD | Probabilistic | **Strengths:** None observed in this study. <br> **Weaknesses:** Catastrophic failure across all metrics, indicating it is unsuitable for this type of task. |
+| 1 | TabPFN, XGBoost | Point Estimation | **Strengths:** Statistically superior point prediction accuracy (RMSE/MAE). Highly optimized and robust. <br> **Weaknesses:** Provide no direct, native uncertainty information. |
+| 2 | TDGPs | Probabilistic | **Strengths:** The best all-rounder. Achieved the best balance of point accuracy and probabilistic performance. <br> **Weaknesses:** Computationally demanding and relies on a legacy software stack. Poor NLL performance may be potential calibration issues. |
+| 3 | CatBoost, TabResFlow | Point & Probabilistic | **Strengths:** CatBoost is a strong and robust point predictor. TabResFlow is a reliable and well-performing baseline for probabilistic tasks (good CRPS and NLL). <br> **Weaknesses:** Neither achieved top-tier performance in their respective primary roles. |
+| 4 | TabResNet, TTVAE | Point & Probabilistic | **Strengths:** TabResNet is a solid deep learning point prediction baseline. TTVAE is a top-tier performer on probabilistic metrics (CRPS/NLL). <br> **Weaknesses:** Both were significantly outperformed on their non-primary tasks. TTVAE, in particular, has very poor point prediction accuracy. |
+| 5 | ARMD | Probabilistic | **Strengths:** None observed in this study for tabular regression. <br> **Weaknesses:** Catastrophic failure across all metrics. Its inductive biases are fundamentally wrong for this task. |
 
 # Per Metric Final results
 
