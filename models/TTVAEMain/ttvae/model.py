@@ -319,83 +319,62 @@ class TTVAE():
                 
         return log_likelihood
     
-    def estimate_nll(self, data_df, n_samples=500, sample_chunk_size=100):
-        """
-        Estimates the Negative Log-Likelihood using a memory-efficient chunking strategy.
+def estimate_nll_target(self, data_df, n_samples=500, sample_chunk_size=100):
+    """
+    Estimate NLL of the last column (target y) given all other columns (features X).
+    """
+    self.encoder.eval()
+    self.decoder.eval()
 
-        Instead of processing all `n_samples` at once, this function processes them
-        in chunks of `sample_chunk_size` to avoid VRAM overflow.
+    # Split features (all but last col) and target (last col)
+    X = data_df.iloc[:, :-1].values.astype('float32')
+    y = data_df.iloc[:, -1].values.astype('float32')
 
-        Args:
-            data_df (pd.DataFrame): The data to evaluate.
-            n_samples (int): The total number of importance samples to use.
-            sample_chunk_size (int): How many samples to process in a single forward pass.
-                                    Lower this if you still run out of memory.
-        """
-        self.encoder.eval()
-        self.decoder.eval()
+    X_tensor = torch.from_numpy(X).to(self._device)
+    y_tensor = torch.from_numpy(y).to(self._device)
 
-        transformed_data = self.transformer.transform(data_df).astype('float32')
-        data_tensor = torch.from_numpy(transformed_data).to(self._device)
-        
-        prior = Normal(loc=torch.zeros(self.latent_dim, device=self._device), 
-                    scale=torch.ones(self.latent_dim, device=self._device))
+    prior = Normal(loc=torch.zeros(self.latent_dim, device=self._device),
+                   scale=torch.ones(self.latent_dim, device=self._device))
 
-        total_nll = 0.0
-        with torch.no_grad():
-            loader = DataLoader(TensorDataset(data_tensor), batch_size=self.batch_size, shuffle=False)
-            for batch_data in loader:
-                real_x = batch_data[0]
-                batch_size = real_x.shape[0]
+    total_nll = 0.0
+    with torch.no_grad():
+        loader = DataLoader(TensorDataset(X_tensor, y_tensor), batch_size=self.batch_size, shuffle=False)
+        for batch_X, batch_y in loader:
+            # Proposal q(z|X,y)
+            mean_q, std_q, _, enc_output = self.encoder(batch_X, batch_y)
+            q_dist = Normal(loc=mean_q, scale=std_q)
 
-                # 1. Get proposal distribution q(z|x) just ONCE per batch.
-                # This is efficient. Shape: [batch_size, latent_dim]
-                mean_q, std_q, _, enc_output = self.encoder(real_x)
-                q_dist = Normal(loc=mean_q, scale=std_q)
-                
-                # This will store the log-weights from all chunks
-                all_log_weights = []
+            all_log_weights = []
+            num_chunks = (n_samples + sample_chunk_size - 1) // sample_chunk_size
 
-                # 2. Loop through samples in manageable chunks
-                num_chunks = (n_samples + sample_chunk_size - 1) // sample_chunk_size
-                for _ in range(num_chunks):
-                    # 2a. Draw a CHUNK of samples from q(z|x)
-                    # sample_shape=[sample_chunk_size] gives shape [chunk_size, batch_size, latent_dim]
-                    z_samples = q_dist.rsample(sample_shape=(sample_chunk_size,))
-                    
-                    # Reshape for the decoder: [chunk_size * batch_size, latent_dim]
-                    z_flat = z_samples.view(-1, self.latent_dim)
-                    
-                    # 2b. Prepare other inputs for the chunk
-                    # We need to expand enc_output and real_x to match the chunk's layout
-                    enc_output_expanded = enc_output.repeat(sample_chunk_size, 1)
-                    real_x_expanded = real_x.repeat(sample_chunk_size, 1)
+            for _ in range(num_chunks):
+                # Sample z from q(z|X,y)
+                z_samples = q_dist.rsample(sample_shape=(sample_chunk_size,))
+                z_flat = z_samples.view(-1, self.latent_dim)
 
-                    # 3. Decode the CHUNK
-                    recon_x, sigmas = self.decoder(z_flat, enc_output_expanded)
-                    
-                    # 4. Calculate components for the CHUNK
-                    log_p_x_z = self._get_log_prob(real_x_expanded, recon_x, sigmas)
-                    
-                    # We need to reshape z_samples to match log_p_x_z's shape (flat)
-                    log_p_z = prior.log_prob(z_flat).sum(dim=-1)
-                    
-                    # q_dist has shape [batch_size, ...], z_samples has shape [chunk, batch, ...]
-                    # So we need to expand q_dist to calculate log_prob correctly.
-                    log_q_z_x = q_dist.log_prob(z_samples).sum(dim=-1).view(-1)
-                    
-                    # 5. Calculate log importance weights for the CHUNK
-                    log_weights_chunk = log_p_x_z + log_p_z - log_q_z_x
-                    all_log_weights.append(log_weights_chunk)
+                enc_out_expanded = enc_output.repeat(sample_chunk_size, 1)
+                batch_y_expanded = batch_y.repeat(sample_chunk_size, 1).view(-1)
 
-                # 6. Combine results from all chunks
-                # Concatenate along a new dimension and then reshape
-                # Final shape will be [batch_size, n_samples]
-                log_weights = torch.cat(all_log_weights).view(n_samples, batch_size).T
-                
-                # 7. Use log-sum-exp for stable calculation (same as before)
-                log_likelihood = torch.logsumexp(log_weights, dim=1) - torch.log(torch.tensor(n_samples, dtype=torch.float, device=self._device))
-                
-                total_nll -= log_likelihood.sum().item()
+                # Decoder predicts parameters of p(y|X,z)
+                mu_y, sigma_y = self.decoder(z_flat, enc_out_expanded)
 
-        return total_nll / len(data_df)
+                # Likelihood of target only
+                log_p_y_xz = Normal(loc=mu_y, scale=sigma_y).log_prob(batch_y_expanded)
+
+                log_p_z = prior.log_prob(z_flat).sum(dim=-1)
+                log_q_z_xy = q_dist.log_prob(z_samples).sum(dim=-1).view(-1)
+
+                log_weights_chunk = log_p_y_xz + log_p_z - log_q_z_xy
+                all_log_weights.append(log_weights_chunk)
+
+            # Combine chunks
+            log_weights = torch.cat(all_log_weights).view(n_samples, batch_X.shape[0]).T
+            log_likelihood = torch.logsumexp(log_weights, dim=1) - torch.log(
+                torch.tensor(n_samples, dtype=torch.float, device=self._device)
+            )
+
+            total_nll -= log_likelihood.sum().item()
+
+    return total_nll / len(data_df)
+
+

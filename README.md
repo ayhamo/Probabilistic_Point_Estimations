@@ -43,7 +43,7 @@ The models that exclusively minimized RMSE (XGBoost, TabPFN) generally had the b
 Point estimates derived from probabilistic models were likely to be better than dedicated point predictors under two  conditions:
 
 1.  **When the Probabilistic Model is Powerful:** The only probabilistic model that consistently challenged the point predictors was TDGPs. This suggests that only well made probabilistic architectures can overcome the disadvantage of not directly optimizing for a point-wise loss function.
-2.  **On Datasets with Potentially Complex Structures:** While not definitively proven, it is possible that datasets like `kin8nm`, where TDGPs performed very well, may have characteristics (e.g., non-Gaussian noise, heteroscedasticity) that are better captured by a flexible model like a Gaussian Process. A GP can learn a more accurate representation of the underlying function, leading to a more accurate mean prediction, whereas models that implicitly assume a simpler error distribution might be disadvantaged.
+2.  **On Datasets with Potentially Complex Structures:** While not definitively proven, it is possible that datasets like `kin8nm`, where TDGPs performed very well, may have characteristics that are better captured by a flexible model like a Gaussian Process. A GP can learn a more accurate representation of the underlying function, leading to a more accurate mean prediction, whereas models that implicitly assume a simpler error distribution might be disadvantaged.
 
 ### 5. Relationship (or lack of) and the variance between probabilistic performance and point estimation accuracy in practice.
 
@@ -119,7 +119,6 @@ This table ranks the models based on their overall performance and reliability f
 | superconductivity (361242) | 4.0911 ± 0.7489 | -4513868.6670 ± 239952.1040 | 55.9570 ± 1.6135 | 264.1196 ± 1.6294 | 2.7825 ± 0.0130 | 3.6412 ± 0.0325 | 3.8052 ± 0.0260 | 4.1125 ± 0.0784 |
 | video_transcoding (361252) | 4.8826 ± 1.8184 | -2799236.7263 ± 163688.5386 | 53.0538 ± 2.8714 | 1468313927389334784.0000 ± 21901444588499712.0000 | 4.8826 ± 1.8184 | 1.2074 ± 0.1804 | 2.1996 ± 0.0568 | 1.8625 ± 0.1307 |
 | wave_energy (361253) | 12.1951 ± 1.2146 | -4539615.1391 ± 449297.4800 | 60.2542 ± 0.7758 | nan | 9.9437 ± 0.0121 | 11.4008 ± 0.0131 | 10.4935 ± 0.0098 | 13.2414 ± 2.4484 |
-| wave_energy(361253) | nan | nan | nan | 0 ± 0 | nan | nan | nan | nan |
 | white_wine (361249) | 0.6118 ± 0.2919 | -959302.7669 ± 28476.7983 | 4.8953 ± 0.7340 | 5.1295 ± 0.0384 | -2.4413 ± 0.2453 | 0.8752 ± 0.0444 | 1.0122 ± 0.0336 | 1.1139 ± 0.0425 |
 
 ### Test CRPS
@@ -167,7 +166,6 @@ This table ranks the models based on their overall performance and reliability f
 | superconductivity (361242) | 11.3786 ± 14.5353 | 9.0065 ± 0.3982 | 27.4435 ± 0.5922 | 6067316633.6000 ± 77265609.9660 | nan | nan | nan | nan |
 | video_transcoding (361252) | 16.6803 ± 20.9636 | 1.1742 ± 0.9249 | 8.5438 ± 0.1180 | 2508689.0727 ± 18507.5873 | nan | nan | nan | nan |
 | wave_energy (361253) | 231868.0315 ± 463776.9219 | 45547.0007 ± 5340.1363 | 82569.0760 ± 913.4778 | nan | nan | nan | nan | nan |
-| wave_energy(361253) | nan | nan | nan | 0± 0 | nan | nan | nan | nan |
 | white_wine (361249) | 0.3997 ± 0.0170 | 0.1406 ± 0.0193 | 0.4328 ± 0.0237 | 1159133.4000 ± 20821.1927 | nan | nan | nan | nan |
 
 ### Test MSE
@@ -215,7 +213,6 @@ This table ranks the models based on their overall performance and reliability f
 | superconductivity (361242) | 1170.5513 ± 2171.2662 | nan | 1178.3707 ± 37.2792 | 1213463.3750 ± 15453.0752 | 94.9896 ± 6.7674 | 85.3380 ± 5.5108 | 118.3788 ± 6.1156 | 221.0088 ± 35.7952 |
 | video_transcoding (361252) | 16063.2969 ± 19043.5284 | nan | 263.3198 ± 13.5337 | 293662751719424.0000 ± 4380295954432.0000 | 12.9445 ± 2.0629 | 0.7008 ± 0.2700 | 4.7962 ± 0.5461 | 2.5143 ± 0.7170 |
 | wave_energy (361253) | 22847758336 ± 31917230080 | nan | 12621949056.0449 ± 175402380.8487 | nan | 20177032.2934 ± 4025032.8038 | 468047280.7898 ± 12394958.3820 | 76239808.9842 ± 1503636.3610 | 630536198.4836 ± 367691990.0705 |
-| wave_energy(361253) | nan | nan | nan | 0± 0 | nan | nan | nan | nan |
 | white_wine (361249) | 0.6213 ± 0.0533 | nan | 0.5054 ± 0.0524 | 231.8274 ± 4.1642 | 0.4841 ± 0.0471 | 0.3384 ± 0.0298 | 0.4443 ± 0.0291 | 0.5438 ± 0.0442 |
 
 ### Test RMSE
@@ -263,7 +260,6 @@ This table ranks the models based on their overall performance and reliability f
 | superconductivity (361242) | 26.1433 ± 22.0698 | nan | 34.3231 ± 0.5453 | 1101.5509 ± 6.9966 | 9.7401 ± 0.3472 | 9.2330 ± 0.2990 | 10.8765 ± 0.2820 | 14.8198 ± 1.1751 |
 | video_transcoding (361252) | 98.5052 ± 79.7497 | nan | 16.2218 ± 0.4159 | 17136112.4000 ± 128141.4936 | 3.5859 ± 0.2932 | 0.8229 ± 0.1538 | 2.1865 ± 0.1244 | 1.5712 ± 0.2139 |
 | wave_energy (361253) | 123541.1879 ± 87093.8173 | nan | 112344.7396 ± 780.0948 | nan | 4470.6085 ± 436.6832 | 21632.5273 ± 284.6779 | 8731.1192 ± 85.8271 | 23975.3117 ± 7464.6250 |
-| wave_energy(361253) | nan | nan | nan | 0± 0 | nan | nan | nan | nan |
 | white_wine (361249) | 0.7875 ± 0.0335 | nan | 0.7100 ± 0.0359 | 15.2253 ± 0.1373 | 0.6949 ± 0.0348 | 0.5811 ± 0.0257 | 0.6662 ± 0.0221 | 0.7368 ± 0.0302 |
 
 ### Test MAE
@@ -311,7 +307,6 @@ This table ranks the models based on their overall performance and reliability f
 | superconductivity (361242) | 21.0983 ± 21.8569 | nan | 29.2808 ± 0.6010 | 264.1196 ± 1.6294 | 5.4539 ± 0.1176 | 4.9466 ± 0.1418 | 7.0011 ± 0.1593 | 9.2058 ± 0.5307 |
 | video_transcoding (361252) | 90.4064 ± 75.1337 | nan | 9.3821 ± 0.1199 | 2508689.0000 ± 18507.6113 | 0.7569 ± 0.0444 | 0.2617 ± 0.0105 | 0.9976 ± 0.0294 | 0.7278 ± 0.0839 |
 | wave_energy (361253) | 95051.8203 ± 68337.7969 | nan | 88436.0550 ± 934.1824 | nan | 3020.2822 ± 81.7656 | 15653.6478 ± 212.7204 | 6730.9778 ± 80.8589 | 21608.9752 ± 7747.6771 |
-| wave_energy(361253) | nan | nan | nan | 0± 0 | nan | nan | nan | nan |
 | white_wine (361249) | 0.5542 ± 0.0263 | nan | 0.5206 ± 0.0251 | 5.1295 ± 0.0384 | 0.5209 ± 0.0228 | 0.3663 ± 0.0128 | 0.5171 ± 0.0124 | 0.5720 ± 0.0178 |
 
 # TabResFlow
@@ -400,66 +395,8 @@ CRPS run 2 (from white_wine): https://www.kaggle.com/code/ayhamo/thesis-main?scr
 
 # Tabular Transformer Variational Autoencoder (TTVAE)
 
-## UCI
+will be updated
 
-Link: https://www.kaggle.com/code/ayhamo/thesis-main/notebook?scriptVersionId=256490991
-
-| Dataset | Test NLL | Test CRPS |
-| --- | --- | --- |
-| Concrete | -121818.77 ± 6785.78 | 16.5084 ± 4.2591 |
-| Energy | -133223.83 ± 3841.92 | 10.0961 ± 1.0014 |
-| Kin8nm | -698553.41 ± 56598.70 | 0.0360 ± 0.0059 |
-| Naval | -2170670.46 ± 106044.53 | 0.0004 ± 0.0001 |
-| Power | -405348.76 ± 32925.58 | 0.5379 ± 0.1704 |
-| Protein | 140623.95 ± 153919.76 | 0.4028 ± 0.4725 |
-| Wine | -260158.03 ± 12166.91 | 0.6452 ± 0.0955 |
-| Yacht | 188912.82 ± 317365.60 | 9.7021 ± 3.2082 |
-
-
-## OpenML-CTR23
-
-From First to till socmob: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=256651809
-
-From Kings_country to end: https://www.kaggle.com/code/ayhamo/thesis-main?scriptVersionId=256788900
-
-
-| Dataset | Test NLL | Test CRPS |
-|---|---|---|
-| grid_stability (361251) | -1754064.5824 ± 72393.7648 | 0.0055 ± 0.0008 |
-| video_transcoding (361252) | -2799236.7263 ± 163688.5386 | 1.1742 ± 0.9249 |
-| wave_energy (361253) | -4539615.1391 ± 449297.4800 | 45547.0007 ± 5340.1363 |
-| sarcos (361254) | -928045.8981 ± 341039.0615 | 5.0657 ± 0.5347 |
-| california_housing (361255) | -480474.9568 ± 236081.4465 | 2192.9962 ± 507.7850 |
-| cpu_activity (361256) | -2132777.3235 ± 134674.0298 | 2.3023 ± 0.3296 |
-| diamonds (361257) | -3960492.1379 ± 124083.4991 | 332.8236 ± 138.7593 |
-| kin8nm (361258) | -704140.4112 ± 44016.9735 | 0.0343 ± 0.0067 |
-| pumadyn32nh (361259) | -4283031.3022 ± 113975.3133 | 0.0269 ± 0.0007 |
-| miami_housing (361260) | -1677436.5230 ± 154491.4727 | 51152.5223 ± 7612.4019 |
-| cps88wages (361261) | -1974276.1528 ± 191446.0284 | 47.4844 ± 102.5393 |
-| socmob (361264) | -823176.6495 ± 19498.3233 | 17.4444 ± 3.6711 |
-| kings_county (361266) | -21573302.8166 ± 980920.8233 | 261336.6678 ± 30781.0411 |
-| brazilian_houses (361267) | -7409031.7753 ± 117205.5756 | 3728.7975 ± 452.2699 |
-| fps_benchmark (361268) | -23031422.8080 ± 2739929.1427 | 52.1407 ± 3.5818 |
-| health_insurance (361269) | -3418521.2611 ± 326400.4136 | 4.2734 ± 0.8808 |
-| fifa (361272) | -24324108.2572 ± 1377421.2039 | 8152.2665 ± 414.4364 |
-| abalone (361234) | -689317.7864 ± 39243.0964 | 0.4786 ± 0.0803 |
-| airfoil_self_noise (361235) | -150640.6005 ± 6040.0656 | 6.6162 ± 0.7420 |
-| auction_verification (361236) | -706028.6224 ± 22864.1325 | 6816.8794 ± 712.0473 |
-| concrete_compressive_strength (361237) | -124668.0796 ± 8117.6284 | 15.3844 ± 3.7464 |
-| physiochemical_protein (361241) | 171817.3181 ± 115575.7099 | 1.1057 ± 2.2849 |
-| superconductivity (361242) | -4513868.6670 ± 239952.1040 | 9.0065 ± 0.3982 |
-| geographical_origin_of_music (361243) | -1309611.8741 ± 44375.6833 | 15.5612 ± 1.3148 |
-| solar_flare (361244) | -554044.1806 ± 3608.1875 | 0.3005 ± 0.0633 |
-| naval_propulsion_plant (361247) | -1825926.7089 ± 121519.0655 | 0.0004 ± 0.0001 |
-| white_wine (361249) | -959302.7669 ± 28476.7983 | 0.1406 ± 0.0193 |
-| red_wine (361250) | -264789.9747 ± 10601.5274 | 0.6226 ± 0.1050 |
-| Moneyball (361616) | -1551801.1300 ± 36463.2680 | 81.2682 ± 7.6853 |
-| energy_efficiency (361617) | -131073.8528 ± 3770.8556 | 9.9136 ± 0.7780 |
-| forest_fires (361618) | -189721.8141 ± 11986.2074 | 12.9297 ± 7.4028 |
-| student_performance_por (361619) | -728500.5565 ± 6008.3948 | 2.7032 ± 0.3712 |
-| QSAR_fish_toxicity (361621) | -13163.9947 ± 198630.1784 | 1.1546 ± 0.1580 |
-| cars (361622) | -243489.0560 ± 4720.8492 | 7887.3716 ± 1166.7600 |
-| space_ga (361623) | -285105.4730 ± 11125.3637 | 0.0309 ± 0.0079 |
 
 # Thin and Deep Gaussian Processes (TDGPs)
 
